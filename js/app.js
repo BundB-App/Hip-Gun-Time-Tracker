@@ -919,6 +919,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 show(location.hash.slice(1) || 'erfassen');
 updatePill();
+window.__appReady = true;
 
 dbx.handleRedirect()
   .then(connected => {

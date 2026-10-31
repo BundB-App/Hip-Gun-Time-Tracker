@@ -1,0 +1,6 @@
+.DS_Store
+.claude/
+Stuff/
+data/
+*-backup-*.json
+time-tracker.json

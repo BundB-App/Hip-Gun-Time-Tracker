@@ -1,6 +1,6 @@
 // Stundenzettel als PDF (A4). Kopf nur mit Logo, Beträge netto (zzgl. MwSt.).
 import { fmtHours, fmtDays, fmtDate, fmtMoney, todayISO } from './format.js';
-import { KINDS, getRates, entryKind, entryAmount, ratesLabel } from './rates.js';
+import { KINDS, entryKind, entryAmount, usedRatesLabel } from './rates.js';
 
 let logoCache = null;
 
@@ -25,7 +25,6 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
   const colDate = M, colKind = M + 23, colDesc = M + 39, colHours = W - M - 30, colAmount = W - M;
   const descWidth = colHours - colDesc - 14;
   const ink = [29, 29, 27], muted = [110, 110, 104], line = [215, 215, 208], accent = [162, 197, 22];
-  const rates = getRates();
 
   // Kopf
   const logo = await loadLogo();
@@ -94,7 +93,7 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
     }
 
     for (const e of group.entries) {
-      const amount = entryAmount(e, rates);
+      const amount = entryAmount(e);
       sum += e.hours;
       sumMoney += amount;
       const lines = doc.splitTextToSize(e.description || '–', descWidth);
@@ -145,7 +144,8 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
   doc.setFontSize(8.5);
   doc.setTextColor(...muted);
   doc.text('Alle Beträge netto, zzgl. gesetzlicher MwSt.', M, y);
-  doc.text(`Tagessätze: ${ratesLabel(rates)} · Teiltage anteilig (1 Tag = 8 Std.)`, M, y + 4.5);
+  const allEntries = groups.flatMap(g => g.entries);
+  doc.text(doc.splitTextToSize(`Tagessätze: ${usedRatesLabel(allEntries)} · Teiltage anteilig (1 Tag = 8 Std.)`, W - 2 * M), M, y + 4.5);
 
   // Fußzeile
   const pages = doc.getNumberOfPages();

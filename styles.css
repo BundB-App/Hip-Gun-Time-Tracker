@@ -282,3 +282,15 @@ button.cal-d.video { color: #fff; }
 .cal-d.today { outline: 1.5px solid var(--text); outline-offset: -1.5px; }
 .cal-d.sel { outline: 2px solid var(--text); outline-offset: 1px; }
 #cal-day h3 { margin-top: 18px; }
+
+/* ---------- Preise ---------- */
+.kind-seg button { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.15; padding: 8px 18px; }
+.kind-seg small { font-size: 12px; font-weight: 500; opacity: .8; }
+.price-edit-block { padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
+.price-editor .row { margin-bottom: 8px; }
+.history { display: grid; gap: 8px; }
+.history-row { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+.history-row .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.client-detail .proj { flex-wrap: wrap; }
+.client-detail .proj .name { flex: 1 1 100%; min-width: 0; }
+@media (min-width: 560px) { .client-detail .proj .name { flex-basis: 0; } }

@@ -23,6 +23,7 @@ Kunde
 | id | string | |
 | name | string | |
 | archived | bool | inaktive Kunden ausblenden (bei 10–50 Kunden sinnvoll) |
+| rates | {ton, video} | aktueller Preis des Kunden, beim Anlegen = Voreinstellung |
 
 ### Projekt
 | Feld | Typ | Hinweis |
@@ -31,6 +32,7 @@ Kunde
 | clientId | string | gehört zu diesem Kunden |
 | name | string | |
 | archived | bool | |
+| rates | {ton, video} | Preis des Projekts, beim Anlegen = damalige Voreinstellung |
 
 Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und ggf. `deleted` für den Sync.
 
@@ -42,12 +44,13 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 | clientId | string | Pflicht |
 | projectId | string \| null | optional |
 | kind | 'ton' \| 'video' | fehlt bei Alteinträgen → gilt als Ton |
+| rates | {weekday, weekend} | beim Erfassen festgeschriebener Tagessatz der Art |
 | hours | number | in 0,5-Schritten, gespeichert immer in Stunden |
 | description | string | „was gemacht wurde“, erscheint im PDF |
 | updatedAt / deleted | Zeitstempel / bool | für Offline-Sync & Konfliktauflösung |
 
 ### Einstellung
-`settings`-Datensatz mit `id: 'rates'` und den Tagessätzen `{ ton: {weekday, weekend}, video: {weekday, weekend} }`. Wird wie alle Daten über Dropbox synchronisiert.
+`settings`-Datensatz mit `id: 'rates'` und der Voreinstellung der Tagessätze `{ ton: {weekday, weekend}, video: {weekday, weekend} }`. Wird wie alle Daten über Dropbox synchronisiert.
 
 ## 3. Regeln
 
@@ -60,14 +63,24 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 
 ## 3a. Tagessätze & Beträge
 
+**Voreinstellung** (in den Einstellungen änderbar):
+
 | Art | Mo–Fr | Sa+So |
 |---|---|---|
 | Ton | 300 € | 350 € |
 | Video | 400 € | 400 € |
 
+**Preise werden festgeschrieben, nie rückwirkend geändert:**
+- **Neuer Kunde** und **neues Projekt** (auch bei einem bestehenden Kunden) bekommen beim Anlegen die *aktuelle* Voreinstellung als eigenen Preis.
+- Eine spätere Änderung der Voreinstellung betrifft nur danach angelegte Kunden und Projekte. Bestehende Projekte behalten ihren Preis.
+- **Preis für neue Einträge:** Projektpreis → sonst Kundenpreis.
+- **Beim Erfassen** stehen die Preise unter „Ton“/„Video“ und sind editierbar. Ein geänderter Preis wird beim Speichern ohne Rückfrage der neue Preis des Kunden bzw. Projekts und gilt, bis wieder ein anderer bestimmt wird.
+- Auf der Kunden-Seite sind Kunden- und Projektpreise direkt änderbar.
+- **Jeder Eintrag speichert seinen Preis** (`rates`). Bearbeiten eines alten Eintrags ändert nur diesen Eintrag.
+- **Nachvollziehbarkeit:** Die Kunden-Seite zeigt „Abgerechnete Preise“ (Art, Satz, Projekt, Zeitraum, Anzahl Einträge). Das PDF nennt die tatsächlich verwendeten Sätze.
 - **Teiltage anteilig:** Betrag = Stunden ÷ 8 × Tagessatz des jeweiligen Wochentags.
-- Beträge netto, in der App bei Einträgen, Kunden, Stundenzettel und im PDF mit Hinweis „zzgl. MwSt.“.
-- Sätze in den Einstellungen änderbar (gelten rückwirkend für alle Einträge).
+- Beträge netto, im PDF mit „zzgl. MwSt.“.
+- Daten von vor dieser Regel (ohne Preis) bekommen einmalig die Voreinstellung 300/350/400 fest eingetragen.
 
 ## 3b. Jahreskalender
 

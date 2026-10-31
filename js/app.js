@@ -2,7 +2,10 @@ import { store, merge, normalize } from './store.js';
 import * as dbx from './dropbox.js';
 import { buildTimesheet, deliverPdf } from './pdf.js';
 import { openCalendar } from './calendar.js';
-import { KINDS, getRates, saveRates, entryKind, isWeekend, entryAmount, sumAmount } from './rates.js';
+import {
+  KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, isWeekend, entryAmount, sumAmount,
+  setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices,
+} from './rates.js';
 import {
   HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong, fmtMonth,
   todayISO, monthRange, esc,
@@ -52,7 +55,7 @@ function createClient() {
     toast(`„${existing.name}“ gibt es schon`);
     return existing;
   }
-  const c = store.upsert('clients', { name, archived: false });
+  const c = store.upsert('clients', { name, archived: false, rates: getDefaultRates() });
   toast(`Kunde „${name}“ angelegt`);
   return c;
 }
@@ -60,7 +63,7 @@ function createClient() {
 function createProject(clientId) {
   const name = prompt(`Neues Projekt für ${clientName(clientId)}:`)?.trim();
   if (!name) return null;
-  const p = store.upsert('projects', { clientId, name, archived: false });
+  const p = store.upsert('projects', { clientId, name, archived: false, rates: getDefaultRates() });
   toast(`Projekt „${name}“ angelegt`);
   return p;
 }
@@ -133,10 +136,15 @@ function viewErfassen(root) {
       <label class="field"><span>Datum</span><input type="date" name="date" required></label>
       <label class="field"><span>Kunde</span><select name="client"></select></label>
       <div id="project-wrap"></div>
-      <div class="field"><span>Art</span>
-        <div class="segmented" id="kind">
-          <button type="button" data-kind="ton">Ton</button><button type="button" data-kind="video">Video</button>
+      <div class="field"><span>Art &amp; Tagessatz</span>
+        <div class="segmented kind-seg" id="kind">
+          <button type="button" data-kind="ton">Ton<small id="price-ton"></small></button><button type="button" data-kind="video">Video<small id="price-video"></small></button>
         </div>
+        <div class="row" style="margin-top:10px">
+          <label class="field" style="margin:0"><span>Mo–Fr (€/Tag)</span><input name="rateWeekday" inputmode="decimal"></label>
+          <label class="field" style="margin:0"><span>Sa+So (€/Tag)</span><input name="rateWeekend" inputmode="decimal"></label>
+        </div>
+        <div class="hint" id="price-hint"></div>
       </div>
       <div class="field"><span>Dauer</span>
         <div class="row">
@@ -160,6 +168,8 @@ function viewErfassen(root) {
   const f = form.elements;
   const projectWrap = root.querySelector('#project-wrap');
   let projectId = editing ? editing.projectId : draft.projectId;
+  // Arbeitskopie der Preise beider Arten; beim Bearbeiten gilt der im Eintrag gespeicherte Preis
+  let prices;
 
   f.date.value = editing?.date || draft.date || todayISO();
   const initialClient = editing?.clientId || draft.clientId || recentClientIds()[0] || '';
@@ -209,9 +219,48 @@ function viewErfassen(root) {
     return roundHalf(unit === 'd' ? n * HOURS_PER_DAY : n);
   }
 
+  function loadPrices() {
+    prices = currentRates(f.client.value, projectId);
+    if (editing && editing.rates) prices[entryKind(editing)] = { ...editing.rates };
+    fillPriceInputs();
+  }
+
+  function fillPriceInputs() {
+    f.rateWeekday.value = fmtNum(prices[kind].weekday);
+    f.rateWeekend.value = fmtNum(prices[kind].weekend);
+    renderPriceInfo();
+  }
+
+  function readPriceInputs() {
+    const weekday = parseNumber(f.rateWeekday.value);
+    const weekend = parseNumber(f.rateWeekend.value);
+    if (weekday >= 0) prices[kind].weekday = weekday;
+    if (weekend >= 0) prices[kind].weekend = weekend;
+    renderPriceInfo();
+  }
+
+  function renderPriceInfo() {
+    root.querySelector('#price-ton').textContent = setLabel(prices.ton);
+    root.querySelector('#price-video').textContent = setLabel(prices.video);
+    const clientId = f.client.value;
+    const hint = root.querySelector('#price-hint');
+    if (editing) {
+      hint.textContent = 'Preis wie beim Erfassen gespeichert. Eine Änderung gilt nur für diesen Eintrag.';
+    } else if (clientId) {
+      const source = projectId ? `Projekt „${projectName(projectId)}“` : `Kunde „${clientName(clientId)}“`;
+      const changed = !sameSet(prices[kind], currentRates(clientId, projectId)[kind]);
+      hint.textContent = changed
+        ? `Neuer Preis – wird beim Speichern für ${source} übernommen und gilt ab dann.`
+        : `Aktueller Preis für ${source}.`;
+    } else {
+      hint.textContent = 'Voreinstellung. Nach Wahl des Kunden steht hier sein Preis.';
+    }
+    renderHint();
+  }
+
   function renderKind() {
     root.querySelectorAll('#kind button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
-    renderHint();
+    fillPriceInputs();
   }
 
   function renderHint() {
@@ -225,7 +274,7 @@ function viewErfassen(root) {
       else text = '';
     }
     if (h > 0 && f.date.value) {
-      const amount = entryAmount({ hours: h, kind, date: f.date.value });
+      const amount = entryAmount({ hours: h, kind, date: f.date.value, rates: prices[kind] });
       const day = isWeekend(f.date.value) ? 'Sa/So' : 'Mo–Fr';
       text = (text ? text + ' · ' : '') + `${fmtMoney(amount)} (${KINDS[kind]}, ${day})`;
     }
@@ -244,6 +293,8 @@ function viewErfassen(root) {
   renderClients(initialClient);
   let lastClient = f.client.value;
   renderProject();
+  prices = currentRates(f.client.value, projectId);
+  if (editing && editing.rates) prices[entryKind(editing)] = { ...editing.rates };
   renderUnit();
   renderKind();
   renderRecent();
@@ -257,6 +308,7 @@ function viewErfassen(root) {
       lastClient = f.client.value;
       projectId = null;
       renderProject();
+      if (!editing) loadPrices();
     }
     if (e.target.name === 'project') {
       if (e.target.value === '__new') {
@@ -266,11 +318,13 @@ function viewErfassen(root) {
       } else {
         projectId = e.target.value || null;
       }
+      if (!editing) loadPrices();
     }
   });
 
   form.addEventListener('input', e => {
     if (e.target.name === 'amount' || e.target.name === 'date') renderHint();
+    if (e.target.name === 'rateWeekday' || e.target.name === 'rateWeekend') readPriceInputs();
   });
 
   form.addEventListener('click', e => {
@@ -289,7 +343,7 @@ function viewErfassen(root) {
       renderHint();
     } else if (t.dataset.act === 'add-project') {
       const p = createProject(f.client.value);
-      if (p) { projectId = p.id; renderProject(); }
+      if (p) { projectId = p.id; renderProject(); if (!editing) loadPrices(); }
     } else if (t.dataset.act === 'cancel') {
       leaveEdit();
     } else if (t.dataset.act === 'delete') {
@@ -308,24 +362,38 @@ function viewErfassen(root) {
     if (!f.date.value) return toast('Bitte ein Datum wählen');
     if (!clientId || clientId === '__new') return toast('Bitte einen Kunden wählen');
     if (!(hours > 0)) return toast('Bitte eine Dauer eingeben (mind. 0,5 Std.)');
+    const set = { weekday: parseNumber(f.rateWeekday.value), weekend: parseNumber(f.rateWeekend.value) };
+    if (!(set.weekday >= 0 && set.weekend >= 0)) return toast('Bitte gültige Tagessätze eingeben');
+    let priceNote = '';
+    if (!editing) {
+      // Geänderter Preis gilt ab jetzt für diesen Kunden bzw. dieses Projekt
+      const source = currentRates(clientId, projectId);
+      if (!sameSet(set, source[kind])) {
+        const rates = { ...source, [kind]: set };
+        if (projectId) store.upsert('projects', { id: projectId, rates });
+        else store.upsert('clients', { id: clientId, rates });
+        priceNote = ' · neuer Preis übernommen';
+      }
+    }
     const saved = store.upsert('entries', {
       id: editing?.id,
       date: f.date.value,
       clientId,
       projectId: projectId || null,
       kind,
+      rates: set,
       hours,
       unit,
       description: f.description.value.trim(),
     });
-    toast(`${fmtHours(hours)} Std. ${KINDS[kind]} für ${clientName(clientId)} gespeichert (${fmtMoney(entryAmount(saved))})`);
+    toast(`${fmtHours(hours)} Std. ${KINDS[kind]} für ${clientName(clientId)} gespeichert (${fmtMoney(entryAmount(saved))})${priceNote}`);
     if (editing) return leaveEdit();
     draft.date = f.date.value;
     draft.clientId = clientId;
     draft.projectId = projectId;
     f.amount.value = '';
     f.description.value = '';
-    renderHint();
+    renderPriceInfo();
   });
 
   function leaveEdit() {
@@ -399,7 +467,29 @@ function viewEintraege(root) {
 const CAL_ICON = '<svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
 
 // ---------- Ansicht: Kunden ----------
-const clientUI = { q: '', showArchived: false, open: null };
+const clientUI = { q: '', showArchived: false, open: null, priceEdit: null };
+
+// Eingabefelder für alle vier Tagessätze; target = 'client:<id>' | 'project:<id>'
+function priceEditorHtml(target, rates) {
+  const input = (kind, day, label) =>
+    `<label class="field" style="margin:0"><span>${label}</span><input inputmode="decimal" data-price="${kind}.${day}" value="${fmtNum(rates[kind][day])}"></label>`;
+  return `
+    <div class="price-editor" data-target="${target}">
+      <div class="row">${input('ton', 'weekday', 'Ton Mo–Fr €')}${input('ton', 'weekend', 'Ton Sa+So €')}</div>
+      <div class="row">${input('video', 'weekday', 'Video Mo–Fr €')}${input('video', 'weekend', 'Video Sa+So €')}</div>
+    </div>`;
+}
+
+function readPriceEditor(container) {
+  const rates = { ton: {}, video: {} };
+  for (const input of container.querySelectorAll('[data-price]')) {
+    const [kind, day] = input.dataset.price.split('.');
+    const n = parseNumber(input.value);
+    if (!(n >= 0)) return null;
+    rates[kind][day] = n;
+  }
+  return rates;
+}
 
 function viewKunden(root) {
   root.innerHTML = `
@@ -454,6 +544,16 @@ function viewKunden(root) {
     } else if (act === 'proj-archive') {
       const p = store.get('projects', id);
       store.upsert('projects', { id, archived: !p.archived });
+    } else if (act === 'edit-prices') {
+      clientUI.priceEdit = clientUI.priceEdit === id ? null : id;
+      update();
+    } else if (act === 'save-prices') {
+      const rates = readPriceEditor(root.querySelector(`.price-editor[data-target="${id}"]`));
+      if (!rates) return toast('Bitte gültige Beträge eingeben');
+      const [type, recId] = id.split(':');
+      clientUI.priceEdit = null;
+      store.upsert(type === 'project' ? 'projects' : 'clients', { id: recId, rates });
+      toast('Neuer Preis gespeichert – gilt ab jetzt für neue Einträge');
     }
   });
 
@@ -482,14 +582,21 @@ function viewKunden(root) {
         </button>
         ${open ? `
         <div class="client-detail">
+          <h3>Aktueller Preis</h3>
+          ${priceRowHtml('client:' + c.id, 'Kunde (ohne Projekt)', currentRates(c.id, null))}
           <h3>Projekte</h3>
           ${projects.map(p => `
             <div class="proj">
-              <span class="name">${esc(p.name)} ${p.archived ? '<span class="badge grey">archiviert</span>' : ''}</span>
+              <span class="name">${esc(p.name)} ${p.archived ? '<span class="badge grey">archiviert</span>' : ''}
+                <div class="sub">${ratesLabel(currentRates(c.id, p.id))}</div></span>
+              <button class="btn small" data-act="edit-prices" data-id="project:${p.id}">Preis</button>
               <button class="btn small" data-act="proj-rename" data-id="${p.id}">Umbenennen</button>
               <button class="btn small" data-act="proj-archive" data-id="${p.id}">${p.archived ? 'Reaktivieren' : 'Archivieren'}</button>
-            </div>`).join('') || '<div class="hint">Noch keine Projekte. Einträge laufen direkt auf den Kunden.</div>'}
+            </div>
+            ${clientUI.priceEdit === 'project:' + p.id ? priceEditBlock('project:' + p.id, currentRates(c.id, p.id)) : ''}`).join('') || '<div class="hint">Noch keine Projekte. Einträge laufen direkt auf den Kunden.</div>'}
           <button class="link" data-act="proj-add" data-id="${c.id}">+ Projekt hinzufügen</button>
+          <p class="hint" style="margin:2px 0 0">Neue Projekte starten mit der aktuellen Voreinstellung aus den Einstellungen.</p>
+          ${historyHtml(own)}
           <div class="actions" style="margin-top:12px">
             <button class="btn small" data-act="calendar" data-id="${c.id}">${CAL_ICON} Kalender</button>
             <button class="btn small" data-act="rename" data-id="${c.id}">Umbenennen</button>
@@ -498,6 +605,40 @@ function viewKunden(root) {
           </div>
         </div>` : ''}`;
     }).join('')}</div>`;
+  }
+
+  function priceRowHtml(target, label, rates) {
+    return `
+      <div class="proj">
+        <span class="name">${label}<div class="sub">${ratesLabel(rates)}</div></span>
+        <button class="btn small" data-act="edit-prices" data-id="${target}">Preis ändern</button>
+      </div>
+      ${clientUI.priceEdit === target ? priceEditBlock(target, rates) : ''}`;
+  }
+
+  function priceEditBlock(target, rates) {
+    return `
+      <div class="price-edit-block">
+        ${priceEditorHtml(target, rates)}
+        <p class="hint">Gilt für neue Einträge. Bereits erfasste Einträge behalten ihren Preis.</p>
+        <div class="actions">
+          <button class="btn small primary" data-act="save-prices" data-id="${target}">Speichern</button>
+          <button class="btn small" data-act="edit-prices" data-id="${target}">Abbrechen</button>
+        </div>
+      </div>`;
+  }
+
+  // Dokumentiert, zu welchem Preis wann abgerechnet wurde
+  function historyHtml(entries) {
+    const rows = priceHistory(entries);
+    if (!rows.length) return '';
+    return `
+      <h3>Abgerechnete Preise</h3>
+      <div class="history">${rows.map(r => `
+        <div class="history-row">
+          <div><span class="badge kind-${r.kind}">${KINDS[r.kind]}</span> <b>${setLabel(r.set)}</b>/Tag${r.projectId ? ` <span class="badge">${esc(projectName(r.projectId))}</span>` : ''}</div>
+          <div class="sub">${periodText(r.from, r.to)} · ${r.count} ${r.count === 1 ? 'Eintrag' : 'Einträge'}</div>
+        </div>`).join('')}</div>`;
   }
 
   update();
@@ -653,7 +794,7 @@ function viewEinstellungen(root) {
     const last = dbx.lastSyncAt();
     const codeFirst = dbx.prefersCodeFlow();
     const counts = { k: store.clients({ includeArchived: true }).length, e: store.all('entries').length };
-    const rates = getRates();
+    const rates = getDefaultRates();
 
     const codeFlow = `
       <div class="field">
@@ -694,8 +835,8 @@ function viewEinstellungen(root) {
       </div>
 
       <div class="card">
-        <h3 style="margin-top:0">Tagessätze (netto)</h3>
-        <p class="hint" style="margin-top:0">Teiltage werden anteilig berechnet: Stunden ÷ 8 × Tagessatz. Gilt für alle Einträge, auch rückwirkend.</p>
+        <h3 style="margin-top:0">Voreinstellung Tagessätze (netto)</h3>
+        <p class="hint" style="margin-top:0">Gilt für <b>neue Kunden</b> und für <b>neue Projekte</b> – auch bei bestehenden Kunden. Bereits angelegte Projekte und erfasste Einträge behalten ihre Preise. Teiltage werden anteilig berechnet (Stunden ÷ 8 × Tagessatz).</p>
         <div class="row">
           <label class="field"><span>Ton Mo–Fr (€)</span><input inputmode="decimal" data-rate="ton.weekday" value="${fmtNum(rates.ton.weekday)}"></label>
           <label class="field"><span>Ton Sa+So (€)</span><input inputmode="decimal" data-rate="ton.weekend" value="${fmtNum(rates.ton.weekend)}"></label>
@@ -704,7 +845,7 @@ function viewEinstellungen(root) {
           <label class="field"><span>Video Mo–Fr (€)</span><input inputmode="decimal" data-rate="video.weekday" value="${fmtNum(rates.video.weekday)}"></label>
           <label class="field"><span>Video Sa+So (€)</span><input inputmode="decimal" data-rate="video.weekend" value="${fmtNum(rates.video.weekend)}"></label>
         </div>
-        <div class="actions"><button class="btn" data-act="save-rates">Tagessätze speichern</button></div>
+        <div class="actions"><button class="btn" data-act="save-rates">Voreinstellung speichern</button></div>
       </div>
 
       <div class="card">
@@ -758,15 +899,15 @@ function viewEinstellungen(root) {
           break;
         }
         case 'save-rates': {
-          const rates = getRates();
+          const rates = getDefaultRates();
           for (const input of root.querySelectorAll('[data-rate]')) {
             const [kind, day] = input.dataset.rate.split('.');
             const n = parseNumber(input.value);
             if (!(n >= 0)) return toast('Bitte gültige Beträge eingeben');
             rates[kind][day] = n;
           }
-          saveRates(rates);
-          toast('Tagessätze gespeichert');
+          saveDefaultRates(rates);
+          toast('Voreinstellung gespeichert – gilt für neue Kunden und Projekte');
           break;
         }
         case 'save-path':
@@ -994,6 +1135,8 @@ store.subscribe(() => {
 });
 
 dbx.onSyncChange(() => {
+  // Erst nach dem Abgleich festschreiben, damit nichts Neueres von anderen Geräten überschrieben wird
+  if (dbx.syncState.status === 'ok') migratePrices();
   updatePill();
   if (current?.name === 'einstellungen') current.update();
 });
@@ -1011,6 +1154,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 
 // Beim Start immer mit der Kundenübersicht beginnen
+if (!dbx.isConnected()) migratePrices();
 show('kunden');
 updatePill();
 window.__appReady = true;

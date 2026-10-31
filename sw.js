@@ -1,6 +1,6 @@
 // Offline-Fähigkeit: App-Dateien werden gecacht. Online wird immer zuerst
 // das Netz gefragt (damit Updates sofort ankommen), offline der Cache.
-const CACHE = 'time-tracker-v3';
+const CACHE = 'time-tracker-v4';
 const ASSETS = [
   './',
   'index.html',

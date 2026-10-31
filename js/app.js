@@ -647,15 +647,13 @@ function viewEinstellungen(root) {
         </div>
       </div>
 
-      <div class="card">
-        <h3 style="margin-top:0">Auf dem iPhone installieren</h3>
-        <ol class="steps">
-          <li>Diese Seite in <b>Safari</b> öffnen.</li>
-          <li>Teilen-Symbol → <b>Zum Home-Bildschirm</b>.</li>
-          <li>Die App vom Home-Bildschirm öffnen und hier mit Dropbox verbinden.</li>
-        </ol>
-        <p class="hint">Die App funktioniert auch offline. Einträge werden synchronisiert, sobald wieder Netz da ist.</p>
-      </div>`;
+      <a class="card list-link" href="#anleitung">
+        <div>
+          <div class="title">Anleitung: App auf dem iPhone nutzen</div>
+          <div class="hint" style="margin:2px 0 0">Alle Schritte von der Installation bis zur Dropbox-Verbindung</div>
+        </div>
+        <span class="chev">›</span>
+      </a>`;
   }
 
   function saveInputs() {
@@ -742,6 +740,100 @@ function viewEinstellungen(root) {
   };
 }
 
+// ---------- Ansicht: Anleitung iPhone ----------
+const APP_URL = 'https://bundb-app.github.io/Hip-Gun-Time-Tracker/';
+
+function viewAnleitung(root) {
+  const link = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${text}</a>`;
+  const step = (n, title, body) => `
+    <div class="card guide-step">
+      <div class="guide-num">${n}</div>
+      <div class="guide-body"><h4>${title}</h4>${body}</div>
+    </div>`;
+
+  root.innerHTML = `
+    <p style="margin:0 0 8px"><a href="#einstellungen" class="link">‹ Einstellungen</a></p>
+    <h2>App auf dem iPhone nutzen</h2>
+    <p class="hint" style="margin-top:-6px;margin-bottom:16px">Einmalig ca. 5 Minuten. Danach startet der Time Tracker wie eine normale App vom Home-Bildschirm.</p>
+
+    <div class="card">
+      <h3 style="margin-top:0">Das brauchst du</h3>
+      <ul class="steps">
+        <li>Ein iPhone mit aktuellem iOS und <b>Safari</b>. Andere Browser können keine Apps zum Home-Bildschirm hinzufügen.</li>
+        <li>Ein <b>Dropbox-Konto</b>. Noch keins? ${link('https://www.dropbox.com/register', 'Kostenlos registrieren')}</li>
+        <li>Optional die ${link('https://apps.apple.com/app/dropbox/id327630330', 'Dropbox-App aus dem App Store')}, damit du dich schneller anmelden kannst.</li>
+      </ul>
+    </div>
+
+    ${step(1, 'Time Tracker in Safari öffnen', `
+      <p>Öffne auf dem iPhone in <b>Safari</b> diese Adresse:</p>
+      <p><code>${APP_URL}</code></p>
+      <div class="actions">
+        <button class="btn small" data-act="copy">Link kopieren</button>
+        ${navigator.share ? '<button class="btn small" data-act="share">Link senden …</button>' : ''}
+      </div>
+      <p class="hint">Tipp: Am Mac mit „Link senden …“ per AirDrop oder Nachricht direkt aufs iPhone schicken.</p>`)}
+
+    ${step(2, 'Zum Home-Bildschirm hinzufügen', `
+      <ol class="steps">
+        <li>Unten in Safari auf das <b>Teilen-Symbol</b> tippen (Quadrat mit Pfeil nach oben). Bei manchen iOS-Versionen erst auf <b>•••</b> tippen.</li>
+        <li>Nach unten scrollen und <b>Zum Home-Bildschirm</b> wählen.</li>
+        <li>Prüfen, dass <b>Als Web-App öffnen</b> eingeschaltet ist (falls angezeigt), dann <b>Hinzufügen</b> tippen.</li>
+      </ol>
+      <p class="hint">Auf dem Home-Bildschirm erscheint jetzt das Hip-Gun-Symbol „Time Tracker“.</p>`)}
+
+    ${step(3, 'App vom Home-Bildschirm starten', `
+      <p>Ab jetzt die App <b>immer über das Symbol</b> auf dem Home-Bildschirm öffnen, nicht über den Safari-Tab. Die installierte App hat ihren eigenen Speicher und ihre eigene Dropbox-Verbindung.</p>`)}
+
+    ${step(4, 'Mit Dropbox verbinden', `
+      <ol class="steps">
+        <li>In der App unten auf <b>Einstellungen</b> tippen.</li>
+        <li><b>Code bei Dropbox holen</b> tippen. Es öffnet sich die Dropbox-Anmeldung.</li>
+        <li>Bei Dropbox anmelden. Bei der Warnung „Bevor Sie diese App verknüpfen …“ auf <b>Weiter</b> tippen.</li>
+        <li>Auf <b>Zulassen</b> tippen. Die App erhält nur Zugriff auf den Ordner <b>Apps › Hip Gun Time Tracker</b>, nicht auf deine übrige Dropbox.</li>
+        <li>Dropbox zeigt einen <b>Zugriffscode</b>. Den Code kopieren (lange drücken → Kopieren).</li>
+        <li>Das Dropbox-Fenster schließen (<b>Fertig</b> oben links) bzw. zurück zur Time-Tracker-App wechseln.</li>
+        <li>Den Code in das Feld <b>Code einfügen</b> einsetzen und auf <b>Bestätigen</b> tippen.</li>
+      </ol>
+      <p class="hint">Der Code gilt nur wenige Minuten und nur einmal. Bei „Anmeldung abgelaufen“ einfach nochmal bei Schritt 2 beginnen.</p>`)}
+
+    ${step(5, 'Fertig, kurz prüfen', `
+      <p>Oben rechts steht jetzt <span class="badge">Synchronisiert</span>. Kunden und Einträge, die bereits auf einem anderen Gerät erfasst wurden, erscheinen nach wenigen Sekunden.</p>
+      <p class="hint">Die Daten liegen als <code>time-tracker.json</code> im Ordner <b>Dropbox › Apps › Hip Gun Time Tracker</b>.</p>`)}
+
+    <div class="card">
+      <h3 style="margin-top:0">Gut zu wissen</h3>
+      <ul class="steps">
+        <li><b>Offline:</b> Einträge lassen sich auch ohne Netz erfassen. Oben steht dann „Offline · Änderungen warten“. Sobald wieder Netz da ist, wird automatisch synchronisiert.</li>
+        <li><b>Stundenzettel aufs iPhone:</b> Unter „Stundenzettel“ auf <b>PDF erstellen</b> tippen. Im Teilen-Menü <b>In Dateien sichern</b>, Mail oder AirDrop wählen.</li>
+        <li><b>Updates:</b> Neue Versionen kommen automatisch. Falls etwas veraltet wirkt, die App ganz schließen (vom unteren Rand hochwischen) und neu öffnen.</li>
+        <li><b>Sync-Fehler:</b> Auf die Statusanzeige oben rechts tippen. Hilft das nicht, unter Einstellungen <b>Trennen</b> und die Schritte 4–5 wiederholen.</li>
+        <li><b>Zugriff entziehen:</b> Jederzeit unter ${link('https://www.dropbox.com/account/connected_apps', 'Dropbox › Verknüpfte Apps')} möglich.</li>
+        <li><b>Andere Personen:</b> Wer die App mit seinem eigenen Dropbox-Konto verbindet, arbeitet mit seinen eigenen, getrennten Daten. Es werden keine Daten zwischen verschiedenen Dropbox-Konten geteilt.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Und am Mac?</h3>
+      <p style="margin:0">Einfach ${link(APP_URL, 'die App-Adresse')} in Safari oder Chrome öffnen, unter Einstellungen auf <b>Mit Dropbox verbinden</b> klicken und zulassen. In Safari kannst du sie über <b>Ablage › Zum Dock hinzufügen</b> auch als eigene App ins Dock legen.</p>
+    </div>`;
+
+  root.addEventListener('click', async e => {
+    const t = e.target.closest('[data-act]');
+    if (!t) return;
+    if (t.dataset.act === 'copy') {
+      try {
+        await navigator.clipboard.writeText(APP_URL);
+        toast('Link kopiert');
+      } catch {
+        toast(APP_URL);
+      }
+    } else if (t.dataset.act === 'share') {
+      navigator.share({ title: 'Hip Gun Time Tracker', url: APP_URL }).catch(() => {});
+    }
+  });
+}
+
 // ---------- Navigation ----------
 const views = {
   erfassen: viewErfassen,
@@ -749,7 +841,11 @@ const views = {
   kunden: viewKunden,
   pdf: viewPdf,
   einstellungen: viewEinstellungen,
+  anleitung: viewAnleitung,
 };
+
+// Unterseiten ohne eigenen Tab markieren ihren Eltern-Tab
+const parentTab = { anleitung: 'einstellungen' };
 
 let current = null;
 
@@ -760,7 +856,8 @@ function show(name) {
   const root = document.createElement('div');
   main.replaceChildren(root);
   current = { name, update: views[name](root) };
-  tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  const tab = parentTab[name] || name;
+  tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === tab));
   if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
 }
 

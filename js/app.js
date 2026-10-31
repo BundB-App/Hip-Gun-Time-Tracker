@@ -849,12 +849,23 @@ const parentTab = { anleitung: 'einstellungen' };
 
 let current = null;
 
+// Ohne Dropbox-Verbindung bleiben Daten nur in diesem Browser – das soll niemand übersehen
+function connectBanner() {
+  if (dbx.isConnected()) return null;
+  const el = document.createElement('a');
+  el.href = '#einstellungen';
+  el.className = 'card banner';
+  el.innerHTML = '<b>Nicht mit Dropbox verbunden.</b> Einträge werden nur in diesem Browser gespeichert und nicht mit anderen Geräten abgeglichen. <u>Jetzt verbinden</u>';
+  return el;
+}
+
 function show(name) {
   if (!views[name]) name = 'erfassen';
   if (name !== 'erfassen') { draft.editingId = null; draft.returnTo = null; }
   // Frischer Container, damit keine Event-Listener der vorigen Ansicht hängen bleiben
   const root = document.createElement('div');
-  main.replaceChildren(root);
+  const banner = name === 'einstellungen' || name === 'anleitung' ? null : connectBanner();
+  main.replaceChildren(...(banner ? [banner] : []), root);
   current = { name, update: views[name](root) };
   const tab = parentTab[name] || name;
   tabs.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === tab));

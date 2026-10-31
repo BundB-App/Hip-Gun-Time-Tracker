@@ -215,3 +215,10 @@ ul.steps li { margin-bottom: 8px; }
 .guide-body h4 { margin: 4px 0 8px; font-size: 17px; }
 .guide-body p { margin: 0 0 8px; }
 .guide-body ol.steps { margin-top: 0; }
+
+.banner {
+  display: block; text-decoration: none; color: var(--text); font-size: 14px;
+  background: #fff4d6; border-color: #e0a100;
+}
+.banner u { color: var(--accent-ink); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .banner { background: #3a2f10; } }

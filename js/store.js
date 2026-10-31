@@ -3,10 +3,11 @@
 
 const DATA_KEY = 'ht.data';
 const DIRTY_KEY = 'ht.dirty';
-export const COLLECTIONS = ['clients', 'projects', 'entries'];
+// settings: einzelne Datensätze wie { id: 'rates', … }, die über alle Geräte synchronisiert werden
+export const COLLECTIONS = ['clients', 'projects', 'entries', 'settings'];
 
 export function emptyDoc() {
-  return { app: 'hip-gun-time-tracker', version: 1, clients: [], projects: [], entries: [] };
+  return { app: 'hip-gun-time-tracker', version: 1, clients: [], projects: [], entries: [], settings: [] };
 }
 
 export function uid() {

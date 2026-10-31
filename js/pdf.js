@@ -1,5 +1,6 @@
-// Stundenzettel als PDF (A4). Kopf nur mit Logo, keine Beträge.
-import { fmtHours, fmtDays, fmtDate } from './format.js';
+// Stundenzettel als PDF (A4). Kopf nur mit Logo, Beträge netto (zzgl. MwSt.).
+import { fmtHours, fmtDays, fmtDate, fmtMoney, todayISO } from './format.js';
+import { KINDS, getRates, entryKind, entryAmount, ratesLabel } from './rates.js';
 
 let logoCache = null;
 
@@ -16,14 +17,15 @@ async function loadLogo() {
   return logoCache;
 }
 
-// groups: [{ name: string|null, entries: [{date, hours, description}] }]
+// groups: [{ name: string|null, entries: [{date, hours, kind, description}] }]
 export async function buildTimesheet({ clientName, from, to, groups }) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-  const W = 210, M = 20, BOTTOM = 275;
-  const colDate = M, colDesc = M + 26, colHours = W - M;
-  const descWidth = colHours - colDesc - 22;
+  const W = 210, M = 20, BOTTOM = 272;
+  const colDate = M, colKind = M + 23, colDesc = M + 39, colHours = W - M - 30, colAmount = W - M;
+  const descWidth = colHours - colDesc - 14;
   const ink = [29, 29, 27], muted = [110, 110, 104], line = [215, 215, 208], accent = [162, 197, 22];
+  const rates = getRates();
 
   // Kopf
   const logo = await loadLogo();
@@ -52,8 +54,10 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...muted);
     doc.text('DATUM', colDate, y);
+    doc.text('ART', colKind, y);
     doc.text('TÄTIGKEIT', colDesc, y);
     doc.text('STUNDEN', colHours, y, { align: 'right' });
+    doc.text('BETRAG', colAmount, y, { align: 'right' });
     y += 2.5;
     doc.setDrawColor(...ink);
     doc.setLineWidth(0.4);
@@ -74,11 +78,10 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
   tableHead();
 
   const showGroupHeads = groups.some(g => g.name);
-  let total = 0;
+  let total = 0, totalMoney = 0;
 
   for (const group of groups) {
-    const sum = group.entries.reduce((s, e) => s + e.hours, 0);
-    total += sum;
+    let sum = 0, sumMoney = 0;
 
     if (showGroupHeads) {
       ensureSpace(14);
@@ -91,30 +94,38 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
     }
 
     for (const e of group.entries) {
+      const amount = entryAmount(e, rates);
+      sum += e.hours;
+      sumMoney += amount;
       const lines = doc.splitTextToSize(e.description || '–', descWidth);
       const h = lines.length * 4.6 + 2.4;
       ensureSpace(h);
       doc.text(fmtDate(e.date), colDate, y);
+      doc.text(KINDS[entryKind(e)], colKind, y);
       doc.text(lines, colDesc, y, { lineHeightFactor: 1.15 });
       doc.text(fmtHours(e.hours), colHours, y, { align: 'right' });
+      doc.text(fmtMoney(amount), colAmount, y, { align: 'right' });
       y += h;
       doc.setDrawColor(...line);
       doc.setLineWidth(0.2);
       doc.line(M, y - 3.6, W - M, y - 3.6);
     }
+    total += sum;
+    totalMoney += sumMoney;
 
     if (showGroupHeads) {
       ensureSpace(10);
       doc.setFont('helvetica', 'bold');
       doc.text('Summe ' + (group.name || 'ohne Projekt'), colDesc, y);
       doc.text(fmtHours(sum), colHours, y, { align: 'right' });
+      doc.text(fmtMoney(sumMoney), colAmount, y, { align: 'right' });
       doc.setFont('helvetica', 'normal');
       y += 9;
     }
   }
 
   // Gesamtsumme
-  ensureSpace(18);
+  ensureSpace(26);
   y += 2;
   doc.setFillColor(...accent);
   doc.rect(M, y - 6, W - 2 * M, 12, 'F');
@@ -122,7 +133,19 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('Gesamt', M + 4, y + 1.6);
-  doc.text(`${fmtHours(total)} Std.  (${fmtDays(total)})`, colHours - 4, y + 1.6, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(`${fmtHours(total)} Std. (${fmtDays(total)})`, colHours, y + 1.6, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(fmtMoney(totalMoney), colAmount - 3, y + 1.6, { align: 'right' });
+
+  y += 12;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...muted);
+  doc.text('Alle Beträge netto, zzgl. gesetzlicher MwSt.', M, y);
+  doc.text(`Tagessätze: ${ratesLabel(rates)} · Teiltage anteilig (1 Tag = 8 Std.)`, M, y + 4.5);
 
   // Fußzeile
   const pages = doc.getNumberOfPages();
@@ -131,7 +154,7 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...muted);
-    doc.text('Erstellt am ' + fmtDate(new Date().toISOString().slice(0, 10)) + '  ·  1 Tag = 8 Stunden', M, 288);
+    doc.text('Erstellt am ' + fmtDate(todayISO()), M, 288);
     doc.text(`Seite ${i} / ${pages}`, W - M, 288, { align: 'right' });
   }
 

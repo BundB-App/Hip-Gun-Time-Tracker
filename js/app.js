@@ -1,8 +1,10 @@
 import { store, merge, normalize } from './store.js';
 import * as dbx from './dropbox.js';
 import { buildTimesheet, deliverPdf } from './pdf.js';
+import { openCalendar } from './calendar.js';
+import { KINDS, getRates, saveRates, entryKind, isWeekend, entryAmount, sumAmount } from './rates.js';
 import {
-  HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtDays, fmtDate, fmtDateLong, fmtMonth,
+  HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong, fmtMonth,
   todayISO, monthRange, esc,
 } from './format.js';
 
@@ -81,18 +83,27 @@ function clientOptionsHtml(selectedId, { placeholder, withNew = false, includeAr
   return html;
 }
 
+function kindBadge(e) {
+  const k = entryKind(e);
+  return `<span class="badge kind-${k}">${KINDS[k]}</span>`;
+}
+
 function entryItemHtml(e, { showClient = true, showDate = false } = {}) {
   const proj = e.projectId ? projectName(e.projectId) : '';
   const title = showClient ? esc(clientName(e.clientId)) : '';
   return `
     <button class="list-item" data-edit="${e.id}">
       <div class="main">
-        ${title || proj ? `<div class="title">${title} ${proj ? `<span class="badge">${esc(proj)}</span>` : ''}</div>` : ''}
+        <div class="title">${title} ${kindBadge(e)} ${proj ? `<span class="badge">${esc(proj)}</span>` : ''}</div>
         ${showDate ? `<div class="sub">${fmtDateLong(e.date)}</div>` : ''}
         ${e.description ? `<div class="desc">${esc(e.description)}</div>` : ''}
       </div>
-      <div class="hours">${fmtHours(e.hours)} Std.</div>
+      <div class="hours">${fmtHours(e.hours)} Std.<div class="money">${fmtMoney(entryAmount(e))}</div></div>
     </button>`;
+}
+
+function editFromCalendar(id) {
+  editEntry(id, current?.name);
 }
 
 function editEntry(id, returnTo) {
@@ -108,12 +119,13 @@ main.addEventListener('click', e => {
 });
 
 // ---------- Ansicht: Erfassen ----------
-const draft = { editingId: null, returnTo: null, unit: 'h', date: null, clientId: null, projectId: null };
+const draft = { editingId: null, returnTo: null, unit: 'h', kind: 'ton', date: null, clientId: null, projectId: null };
 
 function viewErfassen(root) {
   const editing = draft.editingId ? store.get('entries', draft.editingId) : null;
   if (!editing) draft.editingId = null;
   let unit = editing ? (editing.unit || 'h') : draft.unit;
+  let kind = editing ? entryKind(editing) : draft.kind;
 
   root.innerHTML = `
     <h2>${editing ? 'Eintrag bearbeiten' : 'Zeit erfassen'}</h2>
@@ -121,6 +133,11 @@ function viewErfassen(root) {
       <label class="field"><span>Datum</span><input type="date" name="date" required></label>
       <label class="field"><span>Kunde</span><select name="client"></select></label>
       <div id="project-wrap"></div>
+      <div class="field"><span>Art</span>
+        <div class="segmented" id="kind">
+          <button type="button" data-kind="ton">Ton</button><button type="button" data-kind="video">Video</button>
+        </div>
+      </div>
       <div class="field"><span>Dauer</span>
         <div class="row">
           <input name="amount" inputmode="decimal" placeholder="z. B. 3,5" enterkeyhint="next">
@@ -192,6 +209,11 @@ function viewErfassen(root) {
     return roundHalf(unit === 'd' ? n * HOURS_PER_DAY : n);
   }
 
+  function renderKind() {
+    root.querySelectorAll('#kind button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
+    renderHint();
+  }
+
   function renderHint() {
     const n = parseNumber(f.amount.value);
     const h = computedHours();
@@ -201,6 +223,11 @@ function viewErfassen(root) {
       else if (unit === 'd') text = `= ${fmtHours(h)} Std.`;
       else if (h !== n) text = `Wird auf ${fmtHours(h)} Std. gerundet.`;
       else text = '';
+    }
+    if (h > 0 && f.date.value) {
+      const amount = entryAmount({ hours: h, kind, date: f.date.value });
+      const day = isWeekend(f.date.value) ? 'Sa/So' : 'Mo–Fr';
+      text = (text ? text + ' · ' : '') + `${fmtMoney(amount)} (${KINDS[kind]}, ${day})`;
     }
     root.querySelector('#duration-hint').textContent = text;
   }
@@ -218,6 +245,7 @@ function viewErfassen(root) {
   let lastClient = f.client.value;
   renderProject();
   renderUnit();
+  renderKind();
   renderRecent();
 
   form.addEventListener('change', e => {
@@ -242,7 +270,7 @@ function viewErfassen(root) {
   });
 
   form.addEventListener('input', e => {
-    if (e.target.name === 'amount') renderHint();
+    if (e.target.name === 'amount' || e.target.name === 'date') renderHint();
   });
 
   form.addEventListener('click', e => {
@@ -252,6 +280,10 @@ function viewErfassen(root) {
       unit = t.dataset.unit;
       if (!editing) draft.unit = unit;
       renderUnit();
+    } else if (t.dataset.kind) {
+      kind = t.dataset.kind;
+      if (!editing) draft.kind = kind;
+      renderKind();
     } else if (t.dataset.chip) {
       f.amount.value = fmtHours(Number(t.dataset.chip));
       renderHint();
@@ -276,16 +308,17 @@ function viewErfassen(root) {
     if (!f.date.value) return toast('Bitte ein Datum wählen');
     if (!clientId || clientId === '__new') return toast('Bitte einen Kunden wählen');
     if (!(hours > 0)) return toast('Bitte eine Dauer eingeben (mind. 0,5 Std.)');
-    store.upsert('entries', {
+    const saved = store.upsert('entries', {
       id: editing?.id,
       date: f.date.value,
       clientId,
       projectId: projectId || null,
+      kind,
       hours,
       unit,
       description: f.description.value.trim(),
     });
-    toast(`${fmtHours(hours)} Std. für ${clientName(clientId)} gespeichert`);
+    toast(`${fmtHours(hours)} Std. ${KINDS[kind]} für ${clientName(clientId)} gespeichert (${fmtMoney(entryAmount(saved))})`);
     if (editing) return leaveEdit();
     draft.date = f.date.value;
     draft.clientId = clientId;
@@ -346,7 +379,7 @@ function viewEintraege(root) {
       return;
     }
     const total = list.reduce((s, e) => s + e.hours, 0);
-    let html = `<div class="list"><div class="summary"><span>Summe</span><span class="big">${fmtHours(total)} Std. <span class="hint">(${fmtDays(total)})</span></span></div></div><div class="list">`;
+    let html = `<div class="list"><div class="summary"><span>Summe <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(sumAmount(list))}</span></div></div><div class="list">`;
     let day = null;
     for (const e of list) {
       if (e.date !== day) {
@@ -363,6 +396,8 @@ function viewEintraege(root) {
   return update;
 }
 
+const CAL_ICON = '<svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+
 // ---------- Ansicht: Kunden ----------
 const clientUI = { q: '', showArchived: false, open: null };
 
@@ -371,6 +406,7 @@ function viewKunden(root) {
     <h2>Kunden</h2>
     <div class="row" style="margin-bottom:10px">
       <input type="search" id="q" placeholder="Suchen …" value="${esc(clientUI.q)}">
+      <button class="btn grow-0" data-act="calendar" title="Jahreskalender aller Kunden">${CAL_ICON}</button>
       <button class="btn primary grow-0" data-act="new">+ Kunde</button>
     </div>
     <label class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
@@ -389,6 +425,8 @@ function viewKunden(root) {
     if (act === 'new') {
       const c = createClient();
       if (c) { clientUI.open = c.id; update(); }
+    } else if (act === 'calendar') {
+      openCalendar({ clientId: id || '', onEditEntry: editFromCalendar });
     } else if (act === 'toggle') {
       clientUI.open = clientUI.open === id ? null : id;
       update();
@@ -438,7 +476,7 @@ function viewKunden(root) {
         <button class="list-item" data-act="toggle" data-id="${c.id}">
           <div class="main">
             <div class="title">${esc(c.name)} ${c.archived ? '<span class="badge grey">archiviert</span>' : ''}</div>
-            <div class="sub">${own.length} ${own.length === 1 ? 'Eintrag' : 'Einträge'} · ${fmtHours(sum)} Std.${projects.length ? ` · ${projects.length} ${projects.length === 1 ? 'Projekt' : 'Projekte'}` : ''}</div>
+            <div class="sub">${own.length} ${own.length === 1 ? 'Eintrag' : 'Einträge'} · ${fmtHours(sum)} Std. · ${fmtMoney(sumAmount(own))}${projects.length ? ` · ${projects.length} ${projects.length === 1 ? 'Projekt' : 'Projekte'}` : ''}</div>
           </div>
           <div class="sub">${open ? '▴' : '▾'}</div>
         </button>
@@ -453,6 +491,7 @@ function viewKunden(root) {
             </div>`).join('') || '<div class="hint">Noch keine Projekte. Einträge laufen direkt auf den Kunden.</div>'}
           <button class="link" data-act="proj-add" data-id="${c.id}">+ Projekt hinzufügen</button>
           <div class="actions" style="margin-top:12px">
+            <button class="btn small" data-act="calendar" data-id="${c.id}">${CAL_ICON} Kalender</button>
             <button class="btn small" data-act="rename" data-id="${c.id}">Umbenennen</button>
             <button class="btn small" data-act="archive" data-id="${c.id}">${c.archived ? 'Reaktivieren' : 'Archivieren'}</button>
             <button class="btn small danger" data-act="delete" data-id="${c.id}">Löschen</button>
@@ -495,6 +534,7 @@ function viewPdf(root) {
           <button class="chip" data-range="last">Letzter Monat</button>
           <button class="chip" data-range="year">Dieses Jahr</button>
           <button class="chip" data-range="all">Alles</button>
+          <button class="chip" data-range="calendar">${CAL_ICON} Kalender</button>
         </div>
         <div class="row">
           <label class="field" style="margin:0"><span>Von</span><input type="date" id="p-from"></label>
@@ -516,6 +556,19 @@ function viewPdf(root) {
 
   root.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
     const r = b.dataset.range;
+    if (r === 'calendar') {
+      // Monat im Kalender antippen übernimmt ihn als Zeitraum
+      openCalendar({
+        clientId: pdfUI.clientId,
+        onEditEntry: editFromCalendar,
+        onPickMonth: (clientId, range) => {
+          if (clientId) pdfUI.clientId = clientId;
+          Object.assign(pdfUI, range);
+          update();
+        },
+      });
+      return;
+    }
     const y = new Date().getFullYear();
     Object.assign(pdfUI,
       r === 'this' ? monthRange(0)
@@ -569,20 +622,22 @@ function viewPdf(root) {
       return;
     }
     const heads = groups.some(g => g.name);
-    let total = 0;
+    let total = 0, money = 0;
     let html = '<div class="list">';
     for (const g of groups) {
       const sum = g.entries.reduce((s, e) => s + e.hours, 0);
+      const amount = sumAmount(g.entries);
       total += sum;
-      if (heads) html += `<div class="group-head"><span>${esc(g.name || 'Ohne Projekt')}</span><span>${fmtHours(sum)} Std.</span></div>`;
+      money += amount;
+      if (heads) html += `<div class="group-head"><span>${esc(g.name || 'Ohne Projekt')}</span><span>${fmtHours(sum)} Std. · ${fmtMoney(amount)}</span></div>`;
       html += g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
           <div class="sub" style="width:80px;flex:none">${fmtDate(e.date)}</div>
-          <div class="main"><div class="desc" style="margin:0">${esc(e.description) || '–'}</div></div>
-          <div class="hours">${fmtHours(e.hours)}</div>
+          <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
+          <div class="hours">${fmtHours(e.hours)}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
         </button>`).join('');
     }
-    html += `</div><div class="list"><div class="summary"><span>Gesamt</span><span class="big">${fmtHours(total)} Std. <span class="hint">(${fmtDays(total)})</span></span></div></div>`;
+    html += `</div><div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
     preview.innerHTML = html;
   }
 
@@ -598,6 +653,7 @@ function viewEinstellungen(root) {
     const last = dbx.lastSyncAt();
     const codeFirst = dbx.prefersCodeFlow();
     const counts = { k: store.clients({ includeArchived: true }).length, e: store.all('entries').length };
+    const rates = getRates();
 
     const codeFlow = `
       <div class="field">
@@ -635,6 +691,20 @@ function viewEinstellungen(root) {
             <div class="actions" style="margin-bottom:16px"><button class="btn primary" data-act="connect">Mit Dropbox verbinden</button></div>
             ${codeFlow}`}
         `}
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Tagessätze (netto)</h3>
+        <p class="hint" style="margin-top:0">Teiltage werden anteilig berechnet: Stunden ÷ 8 × Tagessatz. Gilt für alle Einträge, auch rückwirkend.</p>
+        <div class="row">
+          <label class="field"><span>Ton Mo–Fr (€)</span><input inputmode="decimal" data-rate="ton.weekday" value="${fmtNum(rates.ton.weekday)}"></label>
+          <label class="field"><span>Ton Sa+So (€)</span><input inputmode="decimal" data-rate="ton.weekend" value="${fmtNum(rates.ton.weekend)}"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Video Mo–Fr (€)</span><input inputmode="decimal" data-rate="video.weekday" value="${fmtNum(rates.video.weekday)}"></label>
+          <label class="field"><span>Video Sa+So (€)</span><input inputmode="decimal" data-rate="video.weekend" value="${fmtNum(rates.video.weekend)}"></label>
+        </div>
+        <div class="actions"><button class="btn" data-act="save-rates">Tagessätze speichern</button></div>
       </div>
 
       <div class="card">
@@ -685,6 +755,18 @@ function viewEinstellungen(root) {
           toast('Mit Dropbox verbunden');
           render();
           dbx.sync();
+          break;
+        }
+        case 'save-rates': {
+          const rates = getRates();
+          for (const input of root.querySelectorAll('[data-rate]')) {
+            const [kind, day] = input.dataset.rate.split('.');
+            const n = parseNumber(input.value);
+            if (!(n >= 0)) return toast('Bitte gültige Beträge eingeben');
+            rates[kind][day] = n;
+          }
+          saveRates(rates);
+          toast('Tagessätze gespeichert');
           break;
         }
         case 'save-path':
@@ -928,7 +1010,8 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service Worker', err));
 }
 
-show(location.hash.slice(1) || 'erfassen');
+// Beim Start immer mit der Kundenübersicht beginnen
+show('kunden');
 updatePill();
 window.__appReady = true;
 

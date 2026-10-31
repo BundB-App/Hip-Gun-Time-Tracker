@@ -1,12 +1,12 @@
 # Time Tracker – Spezifikation
 
-Stand: 31.10.2026 · Ergebnis des Anforderungs-Interviews
+Stand: 01.11.2026 · Ergebnis des Anforderungs-Interviews, ergänzt um Tagessätze und Jahreskalender
 
 ## 1. Zweck & Rahmen
 
 - **Ein Nutzer** (nur ich), kein Login-/Rechtesystem in der App selbst.
 - Zweck: Arbeitszeit **pro Kunde** festhalten, summieren und als **Stundenzettel-PDF** ausgeben.
-- **Keine** Geldbeträge, keine Stundensätze, keine Rechnungen, keine Auswertungen/Dashboards.
+- **Beträge über Tagessätze** (Ton/Video, siehe 3a). Keine Rechnungen, keine Auswertungen/Dashboards.
 - Bedienbar von allen Macs und vom iPhone mit gleichem Datenstand.
 
 ## 2. Datenstruktur
@@ -32,7 +32,7 @@ Kunde
 | name | string | |
 | archived | bool | |
 
-Alle Datensätze (Kunde, Projekt, Eintrag) tragen `updatedAt` und ggf. `deleted` für den Sync.
+Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und ggf. `deleted` für den Sync.
 
 ### Eintrag
 | Feld | Typ | Hinweis |
@@ -41,25 +41,48 @@ Alle Datensätze (Kunde, Projekt, Eintrag) tragen `updatedAt` und ggf. `deleted`
 | date | YYYY-MM-DD | Pflicht |
 | clientId | string | Pflicht |
 | projectId | string \| null | optional |
+| kind | 'ton' \| 'video' | fehlt bei Alteinträgen → gilt als Ton |
 | hours | number | in 0,5-Schritten, gespeichert immer in Stunden |
 | description | string | „was gemacht wurde“, erscheint im PDF |
 | updatedAt / deleted | Zeitstempel / bool | für Offline-Sync & Konfliktauflösung |
 
+### Einstellung
+`settings`-Datensatz mit `id: 'rates'` und den Tagessätzen `{ ton: {weekday, weekend}, video: {weekday, weekend} }`. Wird wie alle Daten über Dropbox synchronisiert.
+
 ## 3. Regeln
 
-- **Erfassung nur manuell** (kein Live-Timer): Datum + Dauer + Beschreibung.
+- **Erfassung nur manuell** (kein Live-Timer): Datum + Art (Ton/Video) + Dauer + Beschreibung.
 - Dauer wahlweise in **Stunden** oder **Tagen** eingeben. **1 Tag = 8 Std.**
 - **Rundung auf 30 Minuten** (0,5 Std.).
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
 - **Projekte optional pro Eintrag:** Hat ein Kunde Projekte, erscheint ein zweites Auswahlfeld, sonst nicht. Ein Kunde ist mit einem Tippen gewählt.
+- **Startseite:** Die App öffnet immer mit der Kundenübersicht.
+
+## 3a. Tagessätze & Beträge
+
+| Art | Mo–Fr | Sa+So |
+|---|---|---|
+| Ton | 300 € | 350 € |
+| Video | 400 € | 400 € |
+
+- **Teiltage anteilig:** Betrag = Stunden ÷ 8 × Tagessatz des jeweiligen Wochentags.
+- Beträge netto, in der App bei Einträgen, Kunden, Stundenzettel und im PDF mit Hinweis „zzgl. MwSt.“.
+- Sätze in den Einstellungen änderbar (gelten rückwirkend für alle Einträge).
+
+## 3b. Jahreskalender
+
+- 12 Monate eines Jahres, gearbeitete Tage farbig: Ton grün, Video blau, beides geteilt. Jahr umschaltbar.
+- Aufrufbar auf der Kunden-Seite (alle Kunden mit Filter und pro Kunde) und auf der Stundenzettel-Seite.
+- Tag antippen zeigt die Einträge, Eintrag antippen öffnet ihn zum Bearbeiten.
+- Im Stundenzettel übernimmt ein Klick auf den Monatsnamen den Monat als Zeitraum.
 
 ## 4. Stundenzettel-PDF (pro Kunde)
 
 - Kopf: **nur Logo** (`Stuff/logo.png`), keine Firmendaten.
 - Kundenname, Zeitraum.
-- Tabelle: Datum · Beschreibung · Stunden, falls vorhanden **gruppiert nach Projekt** mit Zwischensumme.
-- Gesamtsumme in Stunden (und Tagen).
-- Kein Unterschriftsfeld, keine Beträge.
+- Tabelle: Datum · Art · Beschreibung · Stunden · Betrag, falls vorhanden **gruppiert nach Projekt** mit Zwischensumme.
+- Gesamtsumme in Stunden (und Tagen) und Euro, Hinweis „zzgl. MwSt.“ und verwendete Tagessätze.
+- Kein Unterschriftsfeld.
 
 ## 5. Technik
 
@@ -87,7 +110,7 @@ Unter https://www.dropbox.com/developers/apps → deine App:
 5. **App key** (Settings-Seite) notieren. Er ist nicht geheim und kommt in die Konfiguration der App.
    Das **App secret** wird **nicht** benötigt und darf nicht ins Repo.
 
-## 7. Offene Punkte vor dem Bau
+## 7. Status
 
-- Dropbox App Key und gewählter Access type
-- Ist `git` / `gh` auf dem Mac eingerichtet? (Der GitHub-Connector konnte sich in dieser Sitzung nicht verbinden.)
+- Dropbox-App eingerichtet (Access type „App folder“), App Key in `js/config.js` hinterlegt.
+- Daten: `Dropbox/Apps/Hip Gun Time Tracker/time-tracker.json`

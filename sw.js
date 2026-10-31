@@ -1,6 +1,6 @@
 // Offline-Fähigkeit: App-Dateien werden gecacht. Online wird immer zuerst
 // das Netz gefragt (damit Updates sofort ankommen), offline der Cache.
-const CACHE = 'time-tracker-v6';
+const CACHE = 'time-tracker-v7';
 const ASSETS = [
   './',
   'index.html',
@@ -12,6 +12,8 @@ const ASSETS = [
   'js/pdf.js',
   'js/format.js',
   'js/config.js',
+  'js/rates.js',
+  'js/calendar.js',
   'vendor/jspdf.umd.min.js',
   'assets/logo.png',
   'assets/icon-180.png',

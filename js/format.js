@@ -14,6 +14,14 @@ export function fmtHours(h) {
   return h.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
+export function fmtNum(n) {
+  return n.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+}
+
+export function fmtMoney(n) {
+  return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+}
+
 export function fmtDays(h) {
   const d = h / HOURS_PER_DAY;
   const s = d.toLocaleString('de-DE', { maximumFractionDigits: 2 });

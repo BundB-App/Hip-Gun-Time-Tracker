@@ -1,6 +1,6 @@
 // Offline-Fähigkeit: App-Dateien werden gecacht. Online wird immer zuerst
 // das Netz gefragt (damit Updates sofort ankommen), offline der Cache.
-const CACHE = 'time-tracker-v2';
+const CACHE = 'time-tracker-v3';
 const ASSETS = [
   './',
   'index.html',
@@ -35,7 +35,8 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    // no-cache: am HTTP-Cache vorbei beim Server nachfragen, damit Updates sofort da sind
+    fetch(event.request, { cache: 'no-cache' })
       .then(res => {
         if (res.ok) {
           const copy = res.clone();

@@ -308,3 +308,24 @@ button.cal-d.video { color: #fff; }
 .group-toggle { gap: 10px; }
 .group-toggle > span:first-child { flex: 1; min-width: 0; }
 .group-toggle > span:last-child { white-space: nowrap; }
+
+/* ---------- Erfassen kompakt (Dauer + Speichern ohne Scrollen sichtbar) ---------- */
+.kind-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hint:empty { display: none; }
+.chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; min-width: 40px; text-align: center; }
+.compact-form textarea { min-height: 0; }
+.date-field { flex: 0 0 150px !important; }
+@media (max-width: 599px) {
+  .hide-narrow { display: none; }
+  main { padding-top: 12px; }
+  .compact-form { padding: 14px; }
+  .compact-form .field { margin-bottom: 10px; }
+  .compact-form .field > span { margin-bottom: 4px; }
+  .compact-form input, .compact-form select, .compact-form textarea { padding-top: 9px; padding-bottom: 9px; }
+  .compact-form input[type="date"] { min-height: 42px; }
+  .compact-form .segmented button { padding-top: 7px; padding-bottom: 7px; }
+  .compact-form .chips { margin-top: 6px; }
+  .date-field { flex-basis: 138px !important; }
+}

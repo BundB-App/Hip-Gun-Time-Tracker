@@ -159,20 +159,28 @@ function viewErfassen(root) {
   let kind = editing ? entryKind(editing) : draft.kind || lastEnteredKind();
 
   root.innerHTML = `
-    <h2>${editing ? 'Eintrag bearbeiten' : 'Zeit erfassen'}</h2>
-    <form class="card" id="entry-form" autocomplete="off" novalidate>
-      <label class="field"><span>Datum</span><input type="date" name="date" required></label>
-      <label class="field"><span>Kunde</span><select name="client"></select></label>
+    <h2${editing ? '' : ' class="hide-narrow"'}>${editing ? 'Eintrag bearbeiten' : 'Zeit erfassen'}</h2>
+    <form class="card compact-form" id="entry-form" autocomplete="off" novalidate>
+      <div class="row">
+        <label class="field date-field"><span>Datum</span><input type="date" name="date" required></label>
+        <label class="field"><span>Kunde</span><select name="client"></select></label>
+      </div>
       <div id="project-wrap"></div>
       <div class="field"><span>Art &amp; Tagessatz</span>
-        <div class="segmented kind-seg" id="kind">
-          <button type="button" data-kind="ton">Ton<small id="price-ton"></small></button><button type="button" data-kind="video">Video<small id="price-video"></small></button>
+        <div class="kind-row">
+          <div class="segmented kind-seg" id="kind">
+            <button type="button" data-kind="ton">Ton<small id="price-ton"></small></button><button type="button" data-kind="video">Video<small id="price-video"></small></button>
+          </div>
+          <button type="button" class="link" data-act="toggle-price" id="price-toggle">Preis ändern</button>
         </div>
-        <div class="row" style="margin-top:10px">
-          <label class="field" style="margin:0"><span>Mo–Fr (€/Tag)</span><input name="rateWeekday" inputmode="decimal"></label>
-          <label class="field" style="margin:0"><span>Sa+So (€/Tag)</span><input name="rateWeekend" inputmode="decimal"></label>
+        <!-- Preisfelder eingeklappt, damit Dauer und Speichern ohne Scrollen sichtbar sind -->
+        <div id="price-edit" hidden>
+          <div class="row" style="margin-top:10px">
+            <label class="field" style="margin:0"><span>Mo–Fr (€/Tag)</span><input name="rateWeekday" inputmode="decimal"></label>
+            <label class="field" style="margin:0"><span>Sa+So (€/Tag)</span><input name="rateWeekend" inputmode="decimal"></label>
+          </div>
+          <div class="hint" id="price-hint"></div>
         </div>
-        <div class="hint" id="price-hint"></div>
       </div>
       <div class="field"><span>Dauer</span>
         <div class="row">
@@ -184,7 +192,7 @@ function viewErfassen(root) {
         <div class="chips" id="chips"></div>
         <div class="hint" id="duration-hint"></div>
       </div>
-      <label class="field"><span>Beschreibung</span><textarea name="description" placeholder="Was wurde gemacht?"></textarea></label>
+      <label class="field"><span>Beschreibung</span><textarea name="description" rows="2" placeholder="Was wurde gemacht?"></textarea></label>
       <div class="actions">
         <button class="btn primary" type="submit">${editing ? 'Änderungen speichern' : 'Speichern'}</button>
         ${editing ? '<button class="btn" type="button" data-act="cancel">Abbrechen</button><button class="btn danger" type="button" data-act="delete">Löschen</button>' : ''}
@@ -235,9 +243,10 @@ function viewErfassen(root) {
 
   function renderUnit() {
     root.querySelectorAll('#unit button').forEach(b => b.classList.toggle('on', b.dataset.unit === unit));
-    const values = unit === 'h' ? [0.5, 1, 2, 3, 4, 6, 8] : [0.5, 1, 2, 3, 5];
+    // Einheit steht am Umschalter, die Schnellwahl zeigt nur Zahlen (passt in eine Zeile)
+    const values = unit === 'h' ? [1, 2, 3, 4, 5, 6, 8] : [0.5, 1, 2, 3, 5];
     root.querySelector('#chips').innerHTML = values
-      .map(v => `<button type="button" class="chip" data-chip="${v}">${fmtHours(v)} ${unit === 'h' ? 'Std.' : (v === 1 ? 'Tag' : 'Tage')}</button>`)
+      .map(v => `<button type="button" class="chip" data-chip="${v}">${fmtHours(v)}</button>`)
       .join('');
     renderHint();
   }
@@ -287,6 +296,11 @@ function viewErfassen(root) {
     renderHint();
   }
 
+  function setPriceOpen(open) {
+    root.querySelector('#price-edit').hidden = !open;
+    root.querySelector('#price-toggle').textContent = open ? 'Preis ausblenden' : 'Preis ändern';
+  }
+
   function renderKind() {
     root.querySelectorAll('#kind button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
     fillPriceInputs();
@@ -295,7 +309,7 @@ function viewErfassen(root) {
   function renderHint() {
     const n = parseNumber(f.amount.value);
     const h = computedHours();
-    let text = unit === 'd' ? '1 Tag = 8 Std.' : 'Wird auf 30 Minuten gerundet.';
+    let text = '';
     if (n > 0) {
       if (h === 0) text = 'Mindestens 0,5 Std.';
       else if (unit === 'd') text = `= ${fmtHours(h)} Std.`;
@@ -373,6 +387,8 @@ function viewErfassen(root) {
     } else if (t.dataset.act === 'add-project') {
       const p = createProject(f.client.value);
       if (p) { projectId = p.id; renderProject(); if (!editing) loadPrices(); }
+    } else if (t.dataset.act === 'toggle-price') {
+      setPriceOpen(root.querySelector('#price-edit').hidden);
     } else if (t.dataset.act === 'cancel') {
       leaveEdit();
     } else if (t.dataset.act === 'delete') {

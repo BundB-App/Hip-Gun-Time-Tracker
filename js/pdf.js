@@ -1,6 +1,6 @@
 // Stundenzettel als PDF (A4). Kopf nur mit Logo, Beträge netto (zzgl. MwSt.).
 import { fmtHours, fmtDays, fmtDate, fmtMoney, todayISO } from './format.js';
-import { KINDS, entryKind, entryAmount, usedRatesLabel } from './rates.js';
+import { KINDS, entryKind, entryAmount, usedRatesLabel, entryEndDate } from './rates.js';
 
 let logoCache = null;
 
@@ -97,9 +97,12 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
       sum += e.hours;
       sumMoney += amount;
       const lines = doc.splitTextToSize(e.description || '–', descWidth);
-      const h = lines.length * 4.6 + 2.4;
+      // Mehrtägige Einträge: Zeitraum zweizeilig in der Datumsspalte
+      const end = entryEndDate(e);
+      const dateLines = end === e.date ? [fmtDate(e.date)] : [fmtDate(e.date), '– ' + fmtDate(end)];
+      const h = Math.max(lines.length, dateLines.length) * 4.6 + 2.4;
       ensureSpace(h);
-      doc.text(fmtDate(e.date), colDate, y);
+      doc.text(dateLines, colDate, y, { lineHeightFactor: 1.15 });
       doc.text(KINDS[entryKind(e)], colKind, y);
       doc.text(lines, colDesc, y, { lineHeightFactor: 1.15 });
       doc.text(fmtHours(e.hours), colHours, y, { align: 'right' });

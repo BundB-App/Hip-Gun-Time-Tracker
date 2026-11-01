@@ -1,7 +1,7 @@
 // Jahreskalender als Overlay: 12 Monate, gearbeitete Tage nach Ton/Video eingefärbt.
 import { store } from './store.js';
-import { KINDS, entryKind, entryAmount, sumAmount } from './rates.js';
-import { fmtHours, fmtMoney, fmtDateLong, localISO, todayISO, esc } from './format.js';
+import { KINDS, entryKind, entryAmount, sumAmount, entrySpan, entryEndDate } from './rates.js';
+import { fmtHours, fmtMoney, fmtDate, fmtDateLong, localISO, todayISO, esc } from './format.js';
 
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -49,21 +49,29 @@ export function openCalendar({ clientId = '', onEditEntry, onPickMonth } = {}) {
   }
   addEventListener('keydown', onKey);
 
-  function entriesOfYear() {
-    return store.all('entries').filter(e =>
-      e.date.startsWith(state.year + '-') && (!state.clientId || e.clientId === state.clientId));
+  // Einzelne Kalendertage des Jahres; mehrtägige Einträge belegen jeden ihrer Tage
+  function daysOfYear() {
+    const days = [];
+    for (const e of store.all('entries')) {
+      if (state.clientId && e.clientId !== state.clientId) continue;
+      for (const d of entrySpan(e)) {
+        if (d.date.startsWith(state.year + '-')) days.push({ ...d, entry: e });
+      }
+    }
+    return days;
   }
 
   function render() {
-    const entries = entriesOfYear();
+    const days = daysOfYear();
+    const entries = [...new Set(days.map(d => d.entry))];
     const byDay = new Map();
-    for (const e of entries) {
-      if (!byDay.has(e.date)) byDay.set(e.date, []);
-      byDay.get(e.date).push(e);
+    for (const d of days) {
+      if (!byDay.has(d.date)) byDay.set(d.date, []);
+      byDay.get(d.date).push(d.entry);
     }
 
     backdrop.querySelector('#cal-year').textContent = state.year;
-    const hours = entries.reduce((s, e) => s + e.hours, 0);
+    const hours = days.reduce((s, d) => s + d.hours, 0);
     backdrop.querySelector('#cal-summary').innerHTML = entries.length
       ? `<b>${byDay.size}</b> ${byDay.size === 1 ? 'Tag' : 'Tage'} · <b>${fmtHours(hours)}</b> Std. · <b>${fmtMoney(sumAmount(entries))}</b>`
       : 'Keine Einträge in diesem Jahr.';
@@ -75,8 +83,7 @@ export function openCalendar({ clientId = '', onEditEntry, onPickMonth } = {}) {
       const daysInMonth = new Date(state.year, m + 1, 0).getDate();
       const offset = (first.getDay() + 6) % 7; // Montag = 0
       const monthKey = `${state.year}-${String(m + 1).padStart(2, '0')}`;
-      const monthEntries = entries.filter(e => e.date.startsWith(monthKey));
-      const monthHours = monthEntries.reduce((s, e) => s + e.hours, 0);
+      const monthHours = days.filter(d => d.date.startsWith(monthKey)).reduce((s, d) => s + d.hours, 0);
 
       let cells = WEEKDAYS.map(d => `<span class="cal-wd">${d}</span>`).join('');
       cells += '<span></span>'.repeat(offset);
@@ -91,7 +98,7 @@ export function openCalendar({ clientId = '', onEditEntry, onPickMonth } = {}) {
         if (list) {
           const kinds = new Set(list.map(entryKind));
           cls += kinds.size > 1 ? ' both' : ' ' + [...kinds][0];
-          const h = list.reduce((s, e) => s + e.hours, 0);
+          const h = days.filter(x => x.date === iso).reduce((s, x) => s + x.hours, 0);
           cells += `<button class="${cls}" data-day="${iso}" title="${fmtHours(h)} Std.">${d}</button>`;
         } else {
           cells += `<span class="${cls}">${d}</span>`;
@@ -126,6 +133,7 @@ export function openCalendar({ clientId = '', onEditEntry, onPickMonth } = {}) {
           <button class="list-item" data-entry="${e.id}">
             <div class="main">
               <div class="title">${esc(client)} <span class="badge kind-${entryKind(e)}">${KINDS[entryKind(e)]}</span></div>
+              ${entryEndDate(e) !== e.date ? `<div class="sub">${fmtDate(e.date)} – ${fmtDate(entryEndDate(e))}</div>` : ''}
               ${e.description ? `<div class="desc">${esc(e.description)}</div>` : ''}
             </div>
             <div class="hours">${fmtHours(e.hours)} Std.<div class="money">${fmtMoney(entryAmount(e))}</div></div>
@@ -167,7 +175,7 @@ function defaultYear(clientId) {
   const now = new Date().getFullYear();
   const years = store.all('entries')
     .filter(e => !clientId || e.clientId === clientId)
-    .map(e => Number(e.date.slice(0, 4)));
+    .map(e => Number(entryEndDate(e).slice(0, 4)));
   if (!years.length || years.includes(now)) return now;
   return Math.max(...years);
 }

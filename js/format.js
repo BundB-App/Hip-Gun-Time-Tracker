@@ -52,6 +52,11 @@ export function localISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return localISO(new Date(y, m - 1, d + n));
+}
+
 export function monthRange(offset = 0) {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);

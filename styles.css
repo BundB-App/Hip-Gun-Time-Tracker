@@ -314,7 +314,7 @@ button.cal-d.video { color: #fff; }
 .hint:empty { display: none; }
 .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
-.chip { flex: none; min-width: 40px; text-align: center; }
+.chip { flex: 1 1 0; min-width: 0; padding-left: 0; padding-right: 0; text-align: center; }
 .compact-form textarea { min-height: 0; }
 .date-field { flex: 0 0 150px !important; }
 @media (max-width: 599px) {

@@ -3,8 +3,8 @@ import * as dbx from './dropbox.js';
 import { buildTimesheet, deliverPdf } from './pdf.js';
 import { openCalendar } from './calendar.js';
 import {
-  KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, isWeekend, entryAmount, sumAmount,
-  setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices,
+  KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, entryAmount, sumAmount,
+  setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices, entryEndDate, dayTypeLabel,
 } from './rates.js';
 import {
   HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong,
@@ -113,6 +113,13 @@ function clientOptionsHtml(selectedId, { placeholder, withNew = false, includeAr
   return html;
 }
 
+// Mehrtägige Einträge zeigen ihren Zeitraum
+function entryDateText(e, long = false) {
+  const end = entryEndDate(e);
+  if (end === e.date) return long ? fmtDateLong(e.date) : fmtDate(e.date);
+  return `${fmtDate(e.date)} – ${fmtDate(end)}`;
+}
+
 function kindBadge(e) {
   const k = entryKind(e);
   return `<span class="badge kind-${k}">${KINDS[k]}</span>`;
@@ -125,7 +132,7 @@ function entryItemHtml(e, { showClient = true, showDate = false } = {}) {
     <button class="list-item" data-edit="${e.id}">
       <div class="main">
         <div class="title">${title} ${kindBadge(e)} ${proj ? `<span class="badge">${esc(proj)}</span>` : ''}</div>
-        ${showDate ? `<div class="sub">${fmtDateLong(e.date)}</div>` : ''}
+        ${showDate ? `<div class="sub">${entryDateText(e, true)}</div>` : ''}
         ${e.description ? `<div class="desc">${esc(e.description)}</div>` : ''}
       </div>
       <div class="hours">${fmtHours(e.hours)} Std.<div class="money">${fmtMoney(entryAmount(e))}</div></div>
@@ -244,7 +251,7 @@ function viewErfassen(root) {
   function renderUnit() {
     root.querySelectorAll('#unit button').forEach(b => b.classList.toggle('on', b.dataset.unit === unit));
     // Einheit steht am Umschalter, die Schnellwahl zeigt nur Zahlen (passt in eine Zeile)
-    const values = unit === 'h' ? [1, 2, 3, 4, 5, 6, 8] : [0.5, 1, 2, 3, 5];
+    const values = unit === 'h' ? [1, 2, 3, 4, 5, 6, 7, 8] : [0.5, 1, 2, 3, 4, 5, 6, 7, 8];
     root.querySelector('#chips').innerHTML = values
       .map(v => `<button type="button" class="chip" data-chip="${v}">${fmtHours(v)}</button>`)
       .join('');
@@ -317,9 +324,10 @@ function viewErfassen(root) {
       else text = '';
     }
     if (h > 0 && f.date.value) {
-      const amount = entryAmount({ hours: h, kind, date: f.date.value, rates: prices[kind] });
-      const day = isWeekend(f.date.value) ? 'Sa/So' : 'Mo–Fr';
-      text = (text ? text + ' · ' : '') + `${fmtMoney(amount)} (${KINDS[kind]}, ${day})`;
+      const draftEntry = { hours: h, kind, unit, date: f.date.value, rates: prices[kind] };
+      const end = entryEndDate(draftEntry);
+      const span = end !== draftEntry.date ? ` · bis ${fmtDate(end)}` : '';
+      text = (text ? text + ' · ' : '') + `${fmtMoney(entryAmount(draftEntry))} (${KINDS[kind]}, ${dayTypeLabel(draftEntry)})${span}`;
     }
     root.querySelector('#duration-hint').textContent = text;
   }
@@ -783,7 +791,7 @@ function viewPdf(root) {
       if (!open) continue;
       html += g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
-          <div class="sub" style="width:80px;flex:none">${fmtDate(e.date)}</div>
+          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
           <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
           <div class="hours">${fmtHours(e.hours)}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
         </button>`).join('');

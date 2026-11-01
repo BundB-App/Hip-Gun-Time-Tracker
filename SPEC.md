@@ -56,6 +56,7 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 
 - **Erfassung nur manuell** (kein Live-Timer): Datum + Art (Ton/Video) + Dauer + Beschreibung.
 - Dauer wahlweise in **Stunden** oder **Tagen** eingeben. **1 Tag = 8 Std.**
+- Schnellwahl: 1–8 Std. bzw. 0,5 und 1–8 Tage.
 - **Rundung auf 30 Minuten** (0,5 Std.).
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
 - **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind auf der Kunden-Seite jederzeit änderbar.
@@ -83,6 +84,7 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - **Jeder Eintrag speichert seinen Preis** (`rates`). Bearbeiten eines alten Eintrags ändert nur diesen Eintrag.
 - **Nachvollziehbarkeit:** Die Kunden-Seite zeigt „Abgerechnete Preise“ (Art, Satz, Projekt, Zeitraum, Anzahl Einträge). Das PDF nennt die tatsächlich verwendeten Sätze.
 - **Teiltage anteilig:** Betrag = Stunden ÷ 8 × Tagessatz des jeweiligen Wochentags.
+- **Mehrtägige Einträge:** In *Tagen* erfasste Einträge belegen ab dem gewählten Datum aufeinanderfolgende Kalendertage (je 8 Std., Rest am letzten Tag). Jeder Tag wird zum Satz seines Wochentags berechnet – z. B. 8 Tage ab Montag = Mo–Mo der Folgewoche = 6 × Mo–Fr + 2 × Sa+So. Im Kalender ist jeder dieser Tage markiert, in Vorschau und PDF steht der Zeitraum. In *Stunden* erfasste Einträge bleiben immer ein Tag (auch > 8 Std.).
 - Beträge netto, im PDF mit „zzgl. MwSt.“.
 - Daten von vor dieser Regel (ohne Preis) bekommen einmalig die Voreinstellung 300/350/400 fest eingetragen.
 

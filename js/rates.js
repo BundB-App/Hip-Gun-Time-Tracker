@@ -5,7 +5,7 @@
 //   damit spätere Preisänderungen alte Einträge nie verändern.
 // Teiltage werden anteilig berechnet (Stunden ÷ 8 × Tagessatz).
 import { store } from './store.js';
-import { HOURS_PER_DAY, fmtNum, fmtDate } from './format.js';
+import { HOURS_PER_DAY, fmtNum, fmtDate, addDays } from './format.js';
 
 export const KINDS = { ton: 'Ton', video: 'Video' };
 
@@ -53,10 +53,38 @@ export function entryRateSet(e) {
   return e.rates || getDefaultRates()[entryKind(e)];
 }
 
+// In Tagen erfasste Einträge belegen ab ihrem Datum aufeinanderfolgende Kalendertage
+// (je 8 Std., der Rest am letzten Tag). In Stunden erfasste Einträge bleiben ein Tag,
+// auch wenn sie länger als 8 Std. sind.
+export function entrySpan(e) {
+  if (e.unit !== 'd' || e.hours <= HOURS_PER_DAY) return [{ date: e.date, hours: e.hours }];
+  const days = [];
+  for (let rest = e.hours, i = 0; rest > 0; rest -= HOURS_PER_DAY, i++) {
+    days.push({ date: addDays(e.date, i), hours: Math.min(HOURS_PER_DAY, rest) });
+  }
+  return days;
+}
+
+export function entryEndDate(e) {
+  const span = entrySpan(e);
+  return span[span.length - 1].date;
+}
+
+// Jeder Tag zum Satz seines Wochentags
 export function entryAmount(e) {
   const set = entryRateSet(e);
-  const rate = isWeekend(e.date) ? set.weekend : set.weekday;
-  return Math.round((e.hours / HOURS_PER_DAY) * rate * 100) / 100;
+  const total = entrySpan(e).reduce((s, d) =>
+    s + (d.hours / HOURS_PER_DAY) * (isWeekend(d.date) ? set.weekend : set.weekday), 0);
+  return Math.round(total * 100) / 100;
+}
+
+// „Mo–Fr“, „Sa/So“ oder bei mehreren Tagen „6× Mo–Fr, 2× Sa/So“
+export function dayTypeLabel(e) {
+  const span = entrySpan(e);
+  const weekend = span.filter(d => isWeekend(d.date)).length;
+  const weekday = span.length - weekend;
+  if (span.length === 1) return weekend ? 'Sa/So' : 'Mo–Fr';
+  return [weekday && `${weekday}× Mo–Fr`, weekend && `${weekend}× Sa/So`].filter(Boolean).join(', ');
 }
 
 export function sumAmount(entries) {

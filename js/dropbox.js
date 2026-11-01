@@ -6,11 +6,15 @@ const SETTINGS_KEY = 'ht.settings';
 const AUTH_KEY = 'ht.auth';
 const PKCE_KEY = 'ht.pkce';
 const LAST_SYNC_KEY = 'ht.lastSync';
+// Key der ersten Dropbox-App (Zugriff nur auf Dropbox/Apps/…); Anmeldungen ohne gespeicherten Key stammen von ihr
+const LEGACY_APP_KEY = '3v7vqssyf0j853r';
 
 // ---------- Einstellungen ----------
 export function getSettings() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch {}
+  // Gespeicherte Werte gelten nur, solange die App-Konfiguration dieselbe ist
+  if (saved.base !== CONFIG.dropboxAppKey) saved = {};
   return {
     appKey: saved.appKey || CONFIG.dropboxAppKey,
     dataPath: saved.dataPath || CONFIG.dataPath,
@@ -18,7 +22,7 @@ export function getSettings() {
 }
 
 export function saveSettings(patch) {
-  const next = { ...getSettings(), ...patch };
+  const next = { ...getSettings(), ...patch, base: CONFIG.dropboxAppKey };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
 }
@@ -32,8 +36,10 @@ function setAuth(auth) {
   else localStorage.removeItem(AUTH_KEY);
 }
 
+// Eine Anmeldung gilt nur für die Dropbox-App, mit der sie erstellt wurde
 export function isConnected() {
-  return !!getAuth()?.refresh_token;
+  const auth = getAuth();
+  return !!auth?.refresh_token && (auth.appKey || LEGACY_APP_KEY) === getSettings().appKey;
 }
 
 export function lastSyncAt() {
@@ -110,6 +116,7 @@ async function exchangeCode(code, withRedirect) {
     refresh_token: json.refresh_token,
     expires_at: Date.now() + (json.expires_in - 60) * 1000,
     account_id: json.account_id,
+    appKey: getSettings().appKey,
   });
 }
 
@@ -141,7 +148,7 @@ export function disconnect() {
 
 async function accessToken(forceRefresh = false) {
   const auth = getAuth();
-  if (!auth?.refresh_token) throw new Error('Nicht mit Dropbox verbunden.');
+  if (!isConnected()) throw new Error('Nicht mit Dropbox verbunden.');
   if (!forceRefresh && auth.access_token && Date.now() < auth.expires_at) return auth.access_token;
   const body = new URLSearchParams({
     grant_type: 'refresh_token',

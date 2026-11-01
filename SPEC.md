@@ -115,8 +115,8 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 
 Unter https://www.dropbox.com/developers/apps → deine App:
 
-1. **Settings → Access type:** „App folder“ empfohlen. Die Daten landen dann in `Dropbox/Apps/<App-Name>/`.
-   Hinweis: Diese Einstellung lässt sich nachträglich nicht ändern. Bei „Full Dropbox“ legen wir einen festen Pfad fest.
+1. **Access type: „Full Dropbox“**, damit die Daten im Projektordner liegen können (Entscheidung vom 01.11.2026; „App folder“ würde einen eigenen Ordner `Dropbox/Apps/<App-Name>/` erzwingen). Lässt sich nachträglich nicht ändern.
+   Folge: Die im Browser/iPhone gespeicherte Anmeldung hat Zugriff auf die ganze Dropbox. Die App selbst liest und schreibt nur `data/time-tracker.json`.
 2. **Settings → OAuth 2 → Redirect URIs:** eintragen
    - `https://bundb-app.github.io/Hip-Gun-Time-Tracker/` (Groß-/Kleinschreibung im Pfad beachten)
    - `http://localhost:8000/` (für lokale Tests)
@@ -128,5 +128,6 @@ Unter https://www.dropbox.com/developers/apps → deine App:
 
 ## 7. Status
 
-- Dropbox-App eingerichtet (Access type „App folder“), App Key in `js/config.js` hinterlegt.
-- Daten: `Dropbox/Apps/Hip Gun Time Tracker/time-tracker.json`
+- Dropbox-App mit Access type „Full Dropbox“, App Key in `js/config.js`.
+- Daten: `Studio/Time Tracker/data/time-tracker.json` (per `.gitignore` nicht im öffentlichen Repo), Backups in `data/backups/`.
+- **Regel:** Alles, was zum Projekt gehört, liegt ausschließlich in `Studio/Time Tracker`.

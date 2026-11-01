@@ -13,7 +13,7 @@ Stand: 01.11.2026 · Ergebnis des Anforderungs-Interviews, ergänzt um Tagessät
 
 ```
 Kunde
- └─ Projekt (optional, kommt erst bei Folgeaufträgen dazu)
+ └─ Projekt (Pflicht, mind. eins pro Kunde)
      └─ Eintrag
 ```
 
@@ -58,8 +58,11 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - Dauer wahlweise in **Stunden** oder **Tagen** eingeben. **1 Tag = 8 Std.**
 - **Rundung auf 30 Minuten** (0,5 Std.).
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
-- **Projekte optional pro Eintrag:** Hat ein Kunde Projekte, erscheint ein zweites Auswahlfeld, sonst nicht. Ein Kunde ist mit einem Tippen gewählt.
+- **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind auf der Kunden-Seite jederzeit änderbar.
+- Beim Erfassen ist das zuletzt verwendete Projekt des Kunden vorausgewählt.
 - **Startseite:** Die App öffnet immer mit der Kundenübersicht.
+- **Menü:** Erfassen · Kunden · Stundenzettel · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
+- **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt, Zeitraum „Alles“.
 
 ## 3a. Tagessätze & Beträge
 

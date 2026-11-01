@@ -7,7 +7,7 @@ import {
   setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices,
 } from './rates.js';
 import {
-  HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong, fmtMonth,
+  HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong,
   todayISO, monthRange, esc,
 } from './format.js';
 
@@ -56,8 +56,26 @@ function createClient() {
     return existing;
   }
   const c = store.upsert('clients', { name, archived: false, rates: getDefaultRates() });
-  toast(`Kunde „${name}“ angelegt`);
+  // Jeder Kunde hat mindestens ein Projekt; der Name lässt sich später auf der Kunden-Seite ändern
+  const projectName = prompt(`Erstes Projekt für ${name}:`, 'Projekt 1')?.trim() || 'Projekt 1';
+  store.upsert('projects', { clientId: c.id, name: projectName, archived: false, rates: getDefaultRates() });
+  toast(`Kunde „${name}“ mit Projekt „${projectName}“ angelegt`);
   return c;
+}
+
+// Vorauswahl: zuletzt verwendetes Projekt des Kunden, sonst das neueste aktive
+function defaultProjectId(clientId) {
+  const active = store.projectsOf(clientId);
+  const last = store.all('entries')
+    .filter(e => e.clientId === clientId && e.projectId && active.some(p => p.id === e.projectId))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  if (last) return last.projectId;
+  return [...active].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]?.id || null;
+}
+
+// Kunde des zuletzt erfassten Eintrags
+function lastEnteredClientId() {
+  return store.all('entries').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]?.clientId || '';
 }
 
 function createProject(clientId) {
@@ -187,14 +205,14 @@ function viewErfassen(root) {
     const clientId = f.client.value;
     const projects = clientId ? store.projectsOf(clientId) : [];
     const current = projectId ? store.get('projects', projectId) : null;
-    if (current && !projects.includes(current)) projects.push(current);
+    if (current && current.clientId === clientId && !projects.includes(current)) projects.push(current);
+    if (clientId && !projects.some(p => p.id === projectId)) projectId = defaultProjectId(clientId);
     if (!clientId) {
       projectWrap.innerHTML = '';
     } else if (projects.length) {
       projectWrap.innerHTML = `
         <label class="field"><span>Projekt</span>
           <select name="project">
-            <option value="">Ohne Projekt</option>
             ${projects.map(p => `<option value="${p.id}"${p.id === projectId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
             <option value="__new">+ Neues Projekt …</option>
           </select>
@@ -313,7 +331,7 @@ function viewErfassen(root) {
     if (e.target.name === 'project') {
       if (e.target.value === '__new') {
         const p = createProject(f.client.value);
-        projectId = p ? p.id : null;
+        if (p) projectId = p.id;
         renderProject();
       } else {
         projectId = e.target.value || null;
@@ -361,6 +379,7 @@ function viewErfassen(root) {
     const hours = computedHours();
     if (!f.date.value) return toast('Bitte ein Datum wählen');
     if (!clientId || clientId === '__new') return toast('Bitte einen Kunden wählen');
+    if (!projectId) return toast('Bitte ein Projekt wählen oder anlegen');
     if (!(hours > 0)) return toast('Bitte eine Dauer eingeben (mind. 0,5 Std.)');
     const set = { weekday: parseNumber(f.rateWeekday.value), weekend: parseNumber(f.rateWeekend.value) };
     if (!(set.weekday >= 0 && set.weekend >= 0)) return toast('Bitte gültige Tagessätze eingeben');
@@ -409,59 +428,6 @@ function viewErfassen(root) {
     renderProject();
     renderRecent();
   };
-}
-
-// ---------- Ansicht: Einträge ----------
-const listFilter = { month: todayISO().slice(0, 7), clientId: '' };
-
-function viewEintraege(root) {
-  root.innerHTML = `
-    <h2>Einträge</h2>
-    <div class="row" style="margin-bottom:14px">
-      <select id="f-month" aria-label="Monat"></select>
-      <select id="f-client" aria-label="Kunde"></select>
-    </div>
-    <div id="entries"></div>`;
-  const monthSel = root.querySelector('#f-month');
-  const clientSel = root.querySelector('#f-client');
-
-  monthSel.addEventListener('change', () => { listFilter.month = monthSel.value; update(); });
-  clientSel.addEventListener('change', () => { listFilter.clientId = clientSel.value; update(); });
-
-  function update() {
-    const entries = store.all('entries');
-    const months = [...new Set([todayISO().slice(0, 7), ...entries.map(e => e.date.slice(0, 7))])].sort().reverse();
-    monthSel.innerHTML = months.map(m => `<option value="${m}">${fmtMonth(m)}</option>`).join('') + '<option value="all">Alle Monate</option>';
-    monthSel.value = listFilter.month;
-    clientSel.innerHTML = clientOptionsHtml(listFilter.clientId, { placeholder: 'Alle Kunden', includeArchived: true });
-    clientSel.value = listFilter.clientId;
-
-    const list = entries
-      .filter(e => listFilter.month === 'all' || e.date.startsWith(listFilter.month))
-      .filter(e => !listFilter.clientId || e.clientId === listFilter.clientId)
-      .sort(sortEntriesDesc);
-
-    const el = root.querySelector('#entries');
-    if (!list.length) {
-      el.innerHTML = '<div class="empty">Keine Einträge in diesem Zeitraum.</div>';
-      return;
-    }
-    const total = list.reduce((s, e) => s + e.hours, 0);
-    let html = `<div class="list"><div class="summary"><span>Summe <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(sumAmount(list))}</span></div></div><div class="list">`;
-    let day = null;
-    for (const e of list) {
-      if (e.date !== day) {
-        day = e.date;
-        const daySum = list.filter(x => x.date === day).reduce((s, x) => s + x.hours, 0);
-        html += `<div class="group-head"><span>${fmtDateLong(day)}</span><span>${fmtHours(daySum)} Std.</span></div>`;
-      }
-      html += entryItemHtml(e, { showClient: !listFilter.clientId });
-    }
-    el.innerHTML = html + '</div>';
-  }
-
-  update();
-  return update;
 }
 
 const CAL_ICON = '<svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
@@ -582,9 +548,7 @@ function viewKunden(root) {
         </button>
         ${open ? `
         <div class="client-detail">
-          <h3>Aktueller Preis</h3>
-          ${priceRowHtml('client:' + c.id, 'Kunde (ohne Projekt)', currentRates(c.id, null))}
-          <h3>Projekte</h3>
+          <h3>Projekte &amp; Preise</h3>
           ${projects.map(p => `
             <div class="proj">
               <span class="name">${esc(p.name)} ${p.archived ? '<span class="badge grey">archiviert</span>' : ''}
@@ -593,7 +557,7 @@ function viewKunden(root) {
               <button class="btn small" data-act="proj-rename" data-id="${p.id}">Umbenennen</button>
               <button class="btn small" data-act="proj-archive" data-id="${p.id}">${p.archived ? 'Reaktivieren' : 'Archivieren'}</button>
             </div>
-            ${clientUI.priceEdit === 'project:' + p.id ? priceEditBlock('project:' + p.id, currentRates(c.id, p.id)) : ''}`).join('') || '<div class="hint">Noch keine Projekte. Einträge laufen direkt auf den Kunden.</div>'}
+            ${clientUI.priceEdit === 'project:' + p.id ? priceEditBlock('project:' + p.id, currentRates(c.id, p.id)) : ''}`).join('') || '<div class="hint">Noch keine Projekte. Bitte ein Projekt anlegen, um Zeiten zu erfassen.</div>'}
           <button class="link" data-act="proj-add" data-id="${c.id}">+ Projekt hinzufügen</button>
           <p class="hint" style="margin:2px 0 0">Neue Projekte starten mit der aktuellen Voreinstellung aus den Einstellungen.</p>
           ${historyHtml(own)}
@@ -605,15 +569,6 @@ function viewKunden(root) {
           </div>
         </div>` : ''}`;
     }).join('')}</div>`;
-  }
-
-  function priceRowHtml(target, label, rates) {
-    return `
-      <div class="proj">
-        <span class="name">${label}<div class="sub">${ratesLabel(rates)}</div></span>
-        <button class="btn small" data-act="edit-prices" data-id="${target}">Preis ändern</button>
-      </div>
-      ${clientUI.priceEdit === target ? priceEditBlock(target, rates) : ''}`;
   }
 
   function priceEditBlock(target, rates) {
@@ -1060,7 +1015,6 @@ function viewAnleitung(root) {
 // ---------- Navigation ----------
 const views = {
   erfassen: viewErfassen,
-  eintraege: viewEintraege,
   kunden: viewKunden,
   pdf: viewPdf,
   einstellungen: viewEinstellungen,
@@ -1101,7 +1055,12 @@ addEventListener('hashchange', () => {
 
 tabs.addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
-  if (b) { show(b.dataset.view); scrollTo({ top: 0 }); }
+  if (!b) return;
+  if (b.dataset.view === 'pdf') {
+    Object.assign(pdfUI, { clientId: lastEnteredClientId(), projectId: '', from: '', to: '' });
+  }
+  show(b.dataset.view);
+  scrollTo({ top: 0 });
 });
 
 // ---------- Sync-Steuerung ----------

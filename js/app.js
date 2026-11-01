@@ -4,7 +4,7 @@ import { buildTimesheet, deliverPdf } from './pdf.js';
 import { openCalendar } from './calendar.js';
 import {
   KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, entryRateSet, entryAmount, sumAmount,
-  setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices, entryEndDate, dayTypeLabel,
+  setLabel, ratesLabel, sameSet, migratePrices, entryEndDate, dayTypeLabel,
 } from './rates.js';
 import {
   HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong,
@@ -56,7 +56,7 @@ function createClient() {
     return existing;
   }
   const c = store.upsert('clients', { name, archived: false, rates: getDefaultRates() });
-  // Jeder Kunde hat mindestens ein Projekt; der Name lässt sich später auf der Kunden-Seite ändern
+  // Jeder Kunde hat mindestens ein Projekt; der Name lässt sich später im Stundenzettel ändern
   const projectName = prompt(`Erstes Projekt für ${name}:`, 'Projekt 1')?.trim() || 'Projekt 1';
   store.upsert('projects', { clientId: c.id, name: projectName, archived: false, rates: getDefaultRates() });
   toast(`Kunde „${name}“ mit Projekt „${projectName}“ angelegt`);
@@ -470,10 +470,7 @@ function viewErfassen(root) {
 
 const CAL_ICON = '<svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
 
-// ---------- Ansicht: Kunden ----------
-const clientUI = { q: '', showArchived: false, open: null, priceEdit: null };
-
-// Eingabefelder für alle vier Tagessätze; target = 'client:<id>' | 'project:<id>'
+// Eingabefelder für alle vier Tagessätze eines Projekts
 function priceEditorHtml(target, rates) {
   const input = (kind, day, label) =>
     `<label class="field" style="margin:0"><span>${label}</span><input inputmode="decimal" data-price="${kind}.${day}" value="${fmtNum(rates[kind][day])}"></label>`;
@@ -495,162 +492,23 @@ function readPriceEditor(container) {
   return rates;
 }
 
-function viewKunden(root) {
-  root.innerHTML = `
-    <h2>Kunden</h2>
-    <div class="row" style="margin-bottom:10px">
-      <input type="search" id="q" placeholder="Suchen …" value="${esc(clientUI.q)}">
-      <button class="btn grow-0" data-act="calendar" title="Jahreskalender aller Kunden">${CAL_ICON}</button>
-      <button class="btn primary grow-0" data-act="new">+ Kunde</button>
-    </div>
-    <label class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-      <input type="checkbox" id="archived" style="width:auto"${clientUI.showArchived ? ' checked' : ''}> Archivierte Kunden anzeigen
-    </label>
-    <div id="clients"></div>`;
-
-  root.querySelector('#q').addEventListener('input', e => { clientUI.q = e.target.value; update(); });
-  root.querySelector('#archived').addEventListener('change', e => { clientUI.showArchived = e.target.checked; update(); });
-
-  root.addEventListener('click', e => {
-    const t = e.target.closest('[data-act]');
-    if (!t) return;
-    const id = t.dataset.id;
-    const act = t.dataset.act;
-    if (act === 'new') {
-      const c = createClient();
-      if (c) { clientUI.open = c.id; update(); }
-    } else if (act === 'calendar') {
-      openCalendar({ clientId: id || '', onEditEntry: editFromCalendar });
-    } else if (act === 'toggle') {
-      clientUI.open = clientUI.open === id ? null : id;
-      update();
-    } else if (act === 'rename') {
-      const c = store.get('clients', id);
-      const name = prompt('Neuer Name:', c.name)?.trim();
-      if (name) store.upsert('clients', { id, name });
-    } else if (act === 'archive') {
-      const c = store.get('clients', id);
-      store.upsert('clients', { id, archived: !c.archived });
-      toast(c.archived ? 'Kunde reaktiviert' : 'Kunde archiviert');
-    } else if (act === 'delete') {
-      const count = store.all('entries').filter(x => x.clientId === id).length;
-      if (count) return toast('Kunde hat Einträge, bitte stattdessen archivieren');
-      if (confirm('Kunden endgültig löschen?')) {
-        store.projectsOf(id, { includeArchived: true }).forEach(p => store.remove('projects', p.id));
-        store.remove('clients', id);
-      }
-    } else if (act === 'proj-add') {
-      createProject(id);
-    } else if (act === 'proj-rename') {
-      const p = store.get('projects', id);
-      const name = prompt('Neuer Projektname:', p.name)?.trim();
-      if (name) store.upsert('projects', { id, name });
-    } else if (act === 'proj-archive') {
-      const p = store.get('projects', id);
-      store.upsert('projects', { id, archived: !p.archived });
-    } else if (act === 'edit-prices') {
-      clientUI.priceEdit = clientUI.priceEdit === id ? null : id;
-      update();
-    } else if (act === 'save-prices') {
-      const rates = readPriceEditor(root.querySelector(`.price-editor[data-target="${id}"]`));
-      if (!rates) return toast('Bitte gültige Beträge eingeben');
-      const [type, recId] = id.split(':');
-      clientUI.priceEdit = null;
-      store.upsert(type === 'project' ? 'projects' : 'clients', { id: recId, rates });
-      toast('Neuer Preis gespeichert – gilt ab jetzt für neue Einträge');
-    }
-  });
-
-  function update() {
-    const q = clientUI.q.trim().toLowerCase();
-    const clients = store.clients({ includeArchived: clientUI.showArchived })
-      .filter(c => !q || c.name.toLowerCase().includes(q));
-    const entries = store.all('entries');
-    const el = root.querySelector('#clients');
-    if (!clients.length) {
-      el.innerHTML = `<div class="empty">${q ? 'Kein Kunde gefunden.' : 'Noch keine Kunden. Lege oben deinen ersten Kunden an.'}</div>`;
-      return;
-    }
-    el.innerHTML = `<div class="list">${clients.map(c => {
-      const own = entries.filter(e => e.clientId === c.id);
-      const sum = own.reduce((s, e) => s + e.hours, 0);
-      const projects = store.projectsOf(c.id, { includeArchived: true });
-      const open = clientUI.open === c.id;
-      return `
-        <button class="list-item" data-act="toggle" data-id="${c.id}">
-          <div class="main">
-            <div class="title">${esc(c.name)} ${c.archived ? '<span class="badge grey">archiviert</span>' : ''}</div>
-            <div class="sub">${own.length} ${own.length === 1 ? 'Eintrag' : 'Einträge'} · ${fmtHours(sum)} Std. · ${fmtMoney(sumAmount(own))}${projects.length ? ` · ${projects.length} ${projects.length === 1 ? 'Projekt' : 'Projekte'}` : ''}</div>
-          </div>
-          <div class="sub">${open ? '▴' : '▾'}</div>
-        </button>
-        ${open ? `
-        <div class="client-detail">
-          <h3>Projekte &amp; Preise</h3>
-          ${projects.map(p => `
-            <div class="proj">
-              <span class="name">${esc(p.name)} ${p.archived ? '<span class="badge grey">archiviert</span>' : ''}
-                <div class="sub">${ratesLabel(currentRates(c.id, p.id))}</div></span>
-              <button class="btn small" data-act="edit-prices" data-id="project:${p.id}">Preis</button>
-              <button class="btn small" data-act="proj-rename" data-id="${p.id}">Umbenennen</button>
-              <button class="btn small" data-act="proj-archive" data-id="${p.id}">${p.archived ? 'Reaktivieren' : 'Archivieren'}</button>
-            </div>
-            ${clientUI.priceEdit === 'project:' + p.id ? priceEditBlock('project:' + p.id, currentRates(c.id, p.id)) : ''}`).join('') || '<div class="hint">Noch keine Projekte. Bitte ein Projekt anlegen, um Zeiten zu erfassen.</div>'}
-          <button class="link" data-act="proj-add" data-id="${c.id}">+ Projekt hinzufügen</button>
-          <p class="hint" style="margin:2px 0 0">Neue Projekte starten mit der aktuellen Voreinstellung aus den Einstellungen.</p>
-          ${historyHtml(own)}
-          <div class="actions" style="margin-top:12px">
-            <button class="btn small" data-act="calendar" data-id="${c.id}">${CAL_ICON} Kalender</button>
-            <button class="btn small" data-act="rename" data-id="${c.id}">Umbenennen</button>
-            <button class="btn small" data-act="archive" data-id="${c.id}">${c.archived ? 'Reaktivieren' : 'Archivieren'}</button>
-            <button class="btn small danger" data-act="delete" data-id="${c.id}">Löschen</button>
-          </div>
-        </div>` : ''}`;
-    }).join('')}</div>`;
-  }
-
-  function priceEditBlock(target, rates) {
-    return `
-      <div class="price-edit-block">
-        ${priceEditorHtml(target, rates)}
-        <p class="hint">Gilt für neue Einträge. Bereits erfasste Einträge behalten ihren Preis.</p>
-        <div class="actions">
-          <button class="btn small primary" data-act="save-prices" data-id="${target}">Speichern</button>
-          <button class="btn small" data-act="edit-prices" data-id="${target}">Abbrechen</button>
-        </div>
-      </div>`;
-  }
-
-  // Dokumentiert, zu welchem Preis wann abgerechnet wurde
-  function historyHtml(entries) {
-    const rows = priceHistory(entries);
-    if (!rows.length) return '';
-    return `
-      <h3>Abgerechnete Preise</h3>
-      <div class="history">${rows.map(r => `
-        <div class="history-row">
-          <div><span class="badge kind-${r.kind}">${KINDS[r.kind]}</span> <b>${setLabel(r.set)}</b>/Tag${r.projectId ? ` <span class="badge">${esc(projectName(r.projectId))}</span>` : ''}</div>
-          <div class="sub">${periodText(r.from, r.to)} · ${r.count} ${r.count === 1 ? 'Eintrag' : 'Einträge'}</div>
-        </div>`).join('')}</div>`;
-  }
-
-  update();
-  return update;
-}
-
-// ---------- Ansicht: Stundenzettel ----------
+// ---------- Ansicht: Stundenzettel (inkl. Kunden- und Projektverwaltung) ----------
 // open: aufgeklappte Projekte; null = Standard (nur das jüngste Projekt offen)
-const pdfUI = { clientId: '', open: null };
+// menu: Kundenmenü offen; priceEdit: Projekt, dessen Preis gerade bearbeitet wird
+const pdfUI = { clientId: '', open: null, menu: false, priceEdit: null };
 
-// Alle Einträge des Kunden, nach Projekt gruppiert, jüngstes Projekt zuerst
+// Alle Projekte des Kunden mit ihren Einträgen, jüngstes Projekt zuerst, leere Projekte am Ende
 function timesheetGroups() {
   const entries = store.all('entries')
     .filter(e => e.clientId === pdfUI.clientId)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.updatedAt || 0) - (b.updatedAt || 0));
   const map = new Map();
+  for (const p of store.projectsOf(pdfUI.clientId, { includeArchived: true })) {
+    map.set(p.id, { key: p.id, name: p.name, project: p, entries: [] });
+  }
   for (const e of entries) {
     const key = e.projectId || '';
-    if (!map.has(key)) map.set(key, { key, name: key ? projectName(key) : null, entries: [] });
+    if (!map.has(key)) map.set(key, { key, name: key ? projectName(key) : null, project: null, entries: [] });
     map.get(key).entries.push(e);
   }
   const latest = g => g.entries.reduce((m, e) => {
@@ -671,39 +529,119 @@ function usedPricesText(entries) {
   return [...seen.values()].sort().join(' · ');
 }
 
+const MORE_ICON = '<svg class="icon" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>';
+
 function viewPdf(root) {
   root.innerHTML = `
     <h2>Stundenzettel</h2>
-    <div class="row" style="margin-bottom:14px">
+    <div class="row" style="margin-bottom:10px">
       <select id="p-client" aria-label="Kunde"></select>
-      <button class="btn grow-0" data-act="calendar" title="Jahreskalender">${CAL_ICON}</button>
+      <button class="btn grow-0" data-act="calendar" title="Jahreskalender dieses Kunden">${CAL_ICON}</button>
+      <button class="btn grow-0" data-act="menu" title="Kunde verwalten" aria-label="Kunde verwalten">${MORE_ICON}</button>
     </div>
+    <div id="client-menu"></div>
     <div id="preview"></div>
     <button class="btn primary block" id="make-pdf">PDF mit allen Projekten</button>`;
 
   const clientSel = root.querySelector('#p-client');
-  clientSel.addEventListener('change', () => { pdfUI.clientId = clientSel.value; pdfUI.open = null; update(); });
-
-  root.querySelector('[data-act=calendar]').addEventListener('click', () =>
-    openCalendar({ clientId: pdfUI.clientId, onEditEntry: editFromCalendar }));
-
-  root.querySelector('#preview').addEventListener('click', e => {
-    const pdfBtn = e.target.closest('[data-pdf-project]');
-    if (pdfBtn) return makePdf(pdfBtn.dataset.pdfProject);
-    // Projekt auf- bzw. zuklappen
-    const head = e.target.closest('[data-toggle-group]');
-    if (!head) return;
-    const key = head.dataset.toggleGroup;
-    if (pdfUI.open.has(key)) pdfUI.open.delete(key);
-    else pdfUI.open.add(key);
+  clientSel.addEventListener('change', () => {
+    Object.assign(pdfUI, { clientId: clientSel.value, open: null, priceEdit: null });
     update();
+  });
+
+  root.addEventListener('click', e => {
+    const t = e.target.closest('[data-act]');
+    if (!t) {
+      // Projekt auf- bzw. zuklappen
+      const head = e.target.closest('[data-toggle-group]');
+      if (!head) return;
+      const key = head.dataset.toggleGroup;
+      if (pdfUI.open.has(key)) pdfUI.open.delete(key);
+      else pdfUI.open.add(key);
+      return update();
+    }
+    const id = t.dataset.id;
+    const client = store.get('clients', pdfUI.clientId);
+    switch (t.dataset.act) {
+      case 'calendar':
+        openCalendar({ clientId: pdfUI.clientId, onEditEntry: editFromCalendar });
+        break;
+      case 'calendar-all':
+        pdfUI.menu = false;
+        update();
+        openCalendar({ clientId: '', onEditEntry: editFromCalendar });
+        break;
+      case 'menu':
+        pdfUI.menu = !pdfUI.menu;
+        update();
+        break;
+      case 'client-new': {
+        const c = createClient();
+        if (c) Object.assign(pdfUI, { clientId: c.id, open: null, menu: false });
+        update();
+        break;
+      }
+      case 'client-rename': {
+        const name = prompt('Neuer Name des Kunden:', client.name)?.trim();
+        if (name) store.upsert('clients', { id: client.id, name });
+        break;
+      }
+      case 'client-archive':
+        store.upsert('clients', { id: client.id, archived: !client.archived });
+        toast(client.archived ? 'Kunde reaktiviert' : 'Kunde archiviert – erscheint beim Erfassen nicht mehr');
+        break;
+      case 'client-delete': {
+        if (store.all('entries').some(x => x.clientId === client.id)) {
+          return toast('Kunde hat Einträge, bitte stattdessen archivieren');
+        }
+        if (!confirm(`Kunden „${client.name}“ endgültig löschen?`)) return;
+        store.projectsOf(client.id, { includeArchived: true }).forEach(p => store.remove('projects', p.id));
+        store.remove('clients', client.id);
+        Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null, menu: false });
+        update();
+        break;
+      }
+      case 'project-new': {
+        const p = createProject(pdfUI.clientId);
+        if (p) { pdfUI.open = new Set([p.id]); update(); }
+        break;
+      }
+      case 'project-pdf':
+        makePdf(id);
+        break;
+      case 'project-rename': {
+        const p = store.get('projects', id);
+        const name = prompt('Neuer Projektname:', p.name)?.trim();
+        if (name) store.upsert('projects', { id, name });
+        break;
+      }
+      case 'project-archive': {
+        const p = store.get('projects', id);
+        store.upsert('projects', { id, archived: !p.archived });
+        toast(p.archived ? 'Projekt reaktiviert' : 'Projekt archiviert – erscheint beim Erfassen nicht mehr');
+        break;
+      }
+      case 'project-price':
+        pdfUI.priceEdit = pdfUI.priceEdit === id ? null : id;
+        update();
+        break;
+      case 'project-price-save': {
+        const rates = readPriceEditor(root.querySelector(`.price-editor[data-target="${id}"]`));
+        if (!rates) return toast('Bitte gültige Beträge eingeben');
+        pdfUI.priceEdit = null;
+        store.upsert('projects', { id, rates });
+        toast('Neuer Preis gespeichert – gilt ab jetzt für neue Einträge');
+        break;
+      }
+    }
   });
 
   root.querySelector('#make-pdf').addEventListener('click', () => makePdf(null));
 
-  // projectKey = null: alle Projekte
+  // projectKey = null: alle Projekte mit Einträgen
   async function makePdf(projectKey) {
-    const groups = timesheetGroups().filter(g => projectKey === null || g.key === projectKey);
+    const groups = timesheetGroups()
+      .filter(g => g.entries.length && (projectKey === null || g.key === projectKey));
     if (!groups.length) return;
     // Zeitraum ergibt sich aus den enthaltenen Einträgen
     const all = groups.flatMap(g => g.entries);
@@ -721,26 +659,41 @@ function viewPdf(root) {
     }
   }
 
+  function renderMenu(client) {
+    const el = root.querySelector('#client-menu');
+    if (!pdfUI.menu) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div class="card menu-card">
+        <button class="menu-item" data-act="client-new">+ Neuer Kunde</button>
+        ${client ? `
+          <button class="menu-item" data-act="client-rename">„${esc(client.name)}“ umbenennen</button>
+          <button class="menu-item" data-act="client-archive">${client.archived ? 'Kunde reaktivieren' : 'Kunde archivieren'}
+            <span class="hint">${client.archived ? 'Erscheint wieder beim Erfassen' : 'Blendet ihn beim Erfassen aus, Einträge bleiben erhalten'}</span></button>
+          <button class="menu-item danger" data-act="client-delete">Kunde löschen
+            <span class="hint">Nur möglich, solange er keine Einträge hat</span></button>` : ''}
+        <button class="menu-item" data-act="calendar-all">${CAL_ICON} Kalender aller Kunden</button>
+      </div>`;
+  }
+
   function update() {
     clientSel.innerHTML = clientOptionsHtml(pdfUI.clientId, { placeholder: 'Kunde wählen …', includeArchived: true });
     clientSel.value = pdfUI.clientId;
+    const client = store.get('clients', pdfUI.clientId);
+    renderMenu(client);
 
     const preview = root.querySelector('#preview');
     const button = root.querySelector('#make-pdf');
-    if (!pdfUI.clientId) {
+    if (!client) {
       preview.innerHTML = '<div class="empty">Wähle einen Kunden, um den Stundenzettel zu sehen.</div>';
-      button.disabled = true;
+      button.hidden = true;
       return;
     }
     const groups = timesheetGroups();
-    button.disabled = !groups.length;
-    if (!groups.length) {
-      preview.innerHTML = '<div class="empty">Für diesen Kunden gibt es noch keine Einträge.</div>';
-      return;
-    }
-    if (!pdfUI.open) pdfUI.open = new Set([groups[0].key]);
-    const single = groups.length === 1;
-    button.textContent = single ? 'PDF erstellen' : 'PDF mit allen Projekten';
+    const withEntries = groups.filter(g => g.entries.length);
+    button.hidden = !withEntries.length;
+    button.textContent = withEntries.length === 1 ? 'PDF erstellen' : 'PDF mit allen Projekten';
+    if (!pdfUI.open) pdfUI.open = new Set(groups.length ? [groups[0].key] : []);
+
     let total = 0, money = 0;
     let html = '<div class="list">';
     for (const g of groups) {
@@ -748,23 +701,46 @@ function viewPdf(root) {
       const amount = sumAmount(g.entries);
       total += sum;
       money += amount;
-      const open = single || pdfUI.open.has(g.key);
+      const open = pdfUI.open.has(g.key);
+      const p = g.project;
       html += `
-        <button class="group-head group-toggle${open ? ' open' : ''}" ${single ? 'disabled' : `data-toggle-group="${g.key}"`} aria-expanded="${open}">
+        <button class="group-head group-toggle${open ? ' open' : ''}" data-toggle-group="${g.key}" aria-expanded="${open}">
           <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span>
-            <span class="group-prices">${usedPricesText(g.entries)}</span></span>
-          <span>${fmtHours(sum)} Std. · ${fmtMoney(amount)}</span>
+            ${p?.archived ? '<span class="badge grey">archiviert</span>' : ''}
+            <span class="group-prices">${g.entries.length ? usedPricesText(g.entries) : (p ? 'Preis: ' + ratesLabel(currentRates(pdfUI.clientId, p.id)) : '')}</span></span>
+          <span>${g.entries.length ? `${fmtHours(sum)} Std. · ${fmtMoney(amount)}` : ''}</span>
         </button>`;
       if (!open) continue;
-      html += g.entries.map(e => `
+      html += g.entries.length ? g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
           <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
           <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
           <div class="hours">${fmtHours(e.hours)}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
-        </button>`).join('');
-      if (!single) html += `<div class="group-actions"><button class="btn small" data-pdf-project="${g.key}">PDF nur für dieses Projekt</button></div>`;
+        </button>`).join('') : '<div class="empty" style="padding:14px">Noch keine Einträge in diesem Projekt.</div>';
+      if (p) {
+        html += `
+          <div class="group-actions">
+            ${g.entries.length && withEntries.length > 1 ? `<button class="btn small" data-act="project-pdf" data-id="${p.id}">PDF nur dieses Projekt</button>` : ''}
+            <button class="btn small" data-act="project-price" data-id="${p.id}">Preis ändern</button>
+            <button class="btn small" data-act="project-rename" data-id="${p.id}">Umbenennen</button>
+            <button class="btn small" data-act="project-archive" data-id="${p.id}">${p.archived ? 'Reaktivieren' : 'Archivieren'}</button>
+          </div>
+          ${pdfUI.priceEdit === p.id ? `
+            <div class="group-price-edit">
+              <p class="hint" style="margin-top:0">Aktueller Preis: ${ratesLabel(currentRates(pdfUI.clientId, p.id))}. Ein neuer Preis gilt für neue Einträge, bereits erfasste behalten ihren Preis.</p>
+              ${priceEditorHtml(p.id, currentRates(pdfUI.clientId, p.id))}
+              <div class="actions">
+                <button class="btn small primary" data-act="project-price-save" data-id="${p.id}">Preis speichern</button>
+                <button class="btn small" data-act="project-price" data-id="${p.id}">Abbrechen</button>
+              </div>
+            </div>` : ''}`;
+      }
     }
-    html += `</div><div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+    html += `</div>
+      <div class="add-project"><button class="link" data-act="project-new">+ Neues Projekt für ${esc(client.name)}</button></div>`;
+    if (withEntries.length) {
+      html += `<div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+    }
     preview.innerHTML = html;
   }
 
@@ -1046,7 +1022,6 @@ function viewAnleitung(root) {
 // ---------- Navigation ----------
 const views = {
   erfassen: viewErfassen,
-  kunden: viewKunden,
   pdf: viewPdf,
   einstellungen: viewEinstellungen,
   anleitung: viewAnleitung,
@@ -1088,7 +1063,7 @@ tabs.addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
   if (!b) return;
   if (b.dataset.view === 'pdf') {
-    Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null });
+    Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null, menu: false, priceEdit: null });
   }
   show(b.dataset.view);
   scrollTo({ top: 0 });

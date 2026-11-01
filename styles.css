@@ -73,7 +73,7 @@ body {
 /* ---------- Navigation ---------- */
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(3, 1fr);
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
@@ -330,4 +330,16 @@ button.cal-d.video { color: #fff; }
   .date-field { flex-basis: 138px !important; }
 }
 .group-prices { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin: 2px 0 0 18px; }
-.group-actions { padding: 8px 14px 12px; border-top: 1px solid var(--line); text-align: right; }
+.group-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; padding: 8px 14px 12px; border-top: 1px solid var(--line); }
+.group-price-edit { padding: 4px 14px 14px; background: var(--bg); border-top: 1px solid var(--line); }
+.group-price-edit .price-editor .row { margin-bottom: 8px; }
+.add-project { margin: -6px 0 14px; padding: 0 4px; }
+.menu-card { padding: 4px 0; margin-bottom: 12px; }
+.menu-item {
+  display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line);
+  padding: 11px 16px; font: inherit; font-size: 15px; color: var(--text); cursor: pointer;
+}
+.menu-item:first-child { border-top: 0; }
+.menu-item .hint { display: block; margin: 2px 0 0; font-size: 12px; }
+.menu-item.danger { color: var(--danger); }
+.menu-item:hover { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }

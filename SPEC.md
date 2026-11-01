@@ -59,10 +59,12 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - Schnellwahl: 1–8 Std. bzw. 0,5 und 1–8 Tage.
 - **Rundung auf 30 Minuten** (0,5 Std.).
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
-- **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind auf der Kunden-Seite jederzeit änderbar.
+- **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind im Stundenzettel jederzeit änderbar.
 - Beim Erfassen ist das zuletzt verwendete Projekt des Kunden vorausgewählt.
 - **Startseite:** Die App öffnet immer mit „Erfassen“. Vorausgewählt: Kunde, Projekt und Art (Ton/Video) des zuletzt erfassten Eintrags.
-- **Menü:** Erfassen · Stundenzettel · Kunden · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
+- **Menü:** Erfassen · Stundenzettel · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
+- **Kunden- und Projektverwaltung im Stundenzettel:** „…“-Menü neben der Kundenauswahl (Neuer Kunde, Umbenennen, Archivieren/Reaktivieren, Löschen ohne Einträge, Kalender aller Kunden). Im aufgeklappten Projekt: PDF nur dieses Projekt, Preis ändern, Umbenennen, Archivieren. Projekte ohne Einträge werden ebenfalls gezeigt, darunter „+ Neues Projekt“.
+- **Archivieren** blendet Kunde bzw. Projekt beim Erfassen aus. Nichts wird gelöscht; im Stundenzettel bleiben sie sichtbar (markiert) und lassen sich reaktivieren.
 - **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt. Es gibt keinen Zeitraum-Filter, es werden immer alle Einträge des Kunden gezeigt.
 - **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Die Projektüberschrift zeigt Anzahl, Stunden, Betrag und die tatsächlich verwendeten Preise.
 - **PDF:** „PDF mit allen Projekten“ oder im aufgeklappten Projekt „PDF nur für dieses Projekt“. Der Zeitraum im PDF ergibt sich aus erstem und letztem Eintrag.
@@ -81,9 +83,9 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - Eine spätere Änderung der Voreinstellung betrifft nur danach angelegte Kunden und Projekte. Bestehende Projekte behalten ihren Preis.
 - **Preis für neue Einträge:** Projektpreis → sonst Kundenpreis.
 - **Beim Erfassen** stehen die Preise unter „Ton“/„Video“ und sind editierbar. Ein geänderter Preis wird beim Speichern ohne Rückfrage der neue Preis des Kunden bzw. Projekts und gilt, bis wieder ein anderer bestimmt wird.
-- Auf der Kunden-Seite sind Kunden- und Projektpreise direkt änderbar.
+- Im Stundenzettel sind Projektpreise direkt änderbar („Preis ändern“ im aufgeklappten Projekt).
 - **Jeder Eintrag speichert seinen Preis** (`rates`). Bearbeiten eines alten Eintrags ändert nur diesen Eintrag.
-- **Nachvollziehbarkeit:** Die Kunden-Seite zeigt „Abgerechnete Preise“ (Art, Satz, Projekt, Zeitraum, Anzahl Einträge). Das PDF nennt die tatsächlich verwendeten Sätze.
+- **Nachvollziehbarkeit:** Die Projektüberschrift im Stundenzettel zeigt die tatsächlich verwendeten Sätze. Das PDF nennt sie ebenfalls.
 - **Teiltage anteilig:** Betrag = Stunden ÷ 8 × Tagessatz des jeweiligen Wochentags.
 - **Mehrtägige Einträge:** In *Tagen* erfasste Einträge belegen ab dem gewählten Datum aufeinanderfolgende Kalendertage (je 8 Std., Rest am letzten Tag). Jeder Tag wird zum Satz seines Wochentags berechnet – z. B. 8 Tage ab Montag = Mo–Mo der Folgewoche = 6 × Mo–Fr + 2 × Sa+So. Im Kalender ist jeder dieser Tage markiert, in Vorschau und PDF steht der Zeitraum. In *Stunden* erfasste Einträge bleiben immer ein Tag (auch > 8 Std.).
 - Beträge netto, im PDF mit „zzgl. MwSt.“.
@@ -92,9 +94,8 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 ## 3b. Jahreskalender
 
 - 12 Monate eines Jahres, gearbeitete Tage farbig: Ton grün, Video blau, beides geteilt. Jahr umschaltbar.
-- Aufrufbar auf der Kunden-Seite (alle Kunden mit Filter und pro Kunde) und auf der Stundenzettel-Seite.
+- Aufrufbar im Stundenzettel: Kalender-Symbol (gewählter Kunde) und im „…“-Menü (alle Kunden, mit Filter).
 - Tag antippen zeigt die Einträge, Eintrag antippen öffnet ihn zum Bearbeiten.
-- Im Stundenzettel übernimmt ein Klick auf den Monatsnamen den Monat als Zeitraum.
 
 ## 4. Stundenzettel-PDF (pro Kunde)
 

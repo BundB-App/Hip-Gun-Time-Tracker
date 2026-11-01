@@ -940,14 +940,14 @@ function viewAnleitung(root) {
     <div class="card">
       <h3 style="margin-top:0">Das brauchst du</h3>
       <ul class="steps">
-        <li>Ein iPhone mit aktuellem iOS und <b>Safari</b>. Andere Browser können keine Apps zum Home-Bildschirm hinzufügen.</li>
+        <li>Ein iPhone mit <b>iOS ab 16.4</b> und <b>Safari</b> oder <b>Chrome</b>. Bei älterem iOS geht es nur mit Safari.</li>
         <li>Ein <b>Dropbox-Konto</b>. Noch keins? ${link('https://www.dropbox.com/register', 'Kostenlos registrieren')}</li>
         <li>Optional die ${link('https://apps.apple.com/app/dropbox/id327630330', 'Dropbox-App aus dem App Store')}, damit du dich schneller anmelden kannst.</li>
       </ul>
     </div>
 
-    ${step(1, 'Time Tracker in Safari öffnen', `
-      <p>Öffne auf dem iPhone in <b>Safari</b> diese Adresse:</p>
+    ${step(1, 'Time Tracker im Browser öffnen', `
+      <p>Öffne auf dem iPhone in <b>Safari</b> oder <b>Chrome</b> diese Adresse:</p>
       <p><code>${APP_URL}</code></p>
       <div class="actions">
         <button class="btn small" data-act="copy">Link kopieren</button>
@@ -957,14 +957,20 @@ function viewAnleitung(root) {
 
     ${step(2, 'Zum Home-Bildschirm hinzufügen', `
       <ol class="steps">
-        <li>Unten in Safari auf das <b>Teilen-Symbol</b> tippen (Quadrat mit Pfeil nach oben). Bei manchen iOS-Versionen erst auf <b>•••</b> tippen.</li>
+        <li>Auf das <b>Teilen-Symbol</b> tippen:
+          <ul>
+            <li><b>Safari:</b> unten auf das Teilen-Symbol (Quadrat mit Pfeil nach oben). Bei manchen iOS-Versionen erst auf <b>•••</b> tippen.</li>
+            <li><b>Chrome:</b> rechts in der Adressleiste auf das Teilen-Symbol.</li>
+          </ul>
+        </li>
         <li>Nach unten scrollen und <b>Zum Home-Bildschirm</b> wählen.</li>
         <li>Prüfen, dass <b>Als Web-App öffnen</b> eingeschaltet ist (falls angezeigt), dann <b>Hinzufügen</b> tippen.</li>
       </ol>
       <p class="hint">Auf dem Home-Bildschirm erscheint jetzt das Hip-Gun-Symbol „Time Tracker“.</p>`)}
 
     ${step(3, 'App vom Home-Bildschirm starten', `
-      <p>Ab jetzt die App <b>immer über das Symbol</b> auf dem Home-Bildschirm öffnen, nicht über den Safari-Tab. Die installierte App hat ihren eigenen Speicher und ihre eigene Dropbox-Verbindung.</p>`)}
+      <p>Ab jetzt die App <b>immer über das Symbol</b> auf dem Home-Bildschirm öffnen, nicht über den Browser-Tab. Die installierte App hat ihren eigenen Speicher und ihre eigene Dropbox-Verbindung.</p>
+      <p class="hint">Am besten pro Gerät bei einer Variante bleiben: Jede Installation (Safari, Chrome, Browser-Tab) hat ihren eigenen Speicher und muss sich einzeln mit Dropbox verbinden.</p>`)}
 
     ${step(4, 'Mit Dropbox verbinden', `
       <ol class="steps">
@@ -996,7 +1002,12 @@ function viewAnleitung(root) {
 
     <div class="card">
       <h3 style="margin-top:0">Und am Mac?</h3>
-      <p style="margin:0">Einfach ${link(APP_URL, 'die App-Adresse')} in Safari oder Chrome öffnen, unter Einstellungen auf <b>Mit Dropbox verbinden</b> klicken und zulassen. In Safari kannst du sie über <b>Ablage › Zum Dock hinzufügen</b> auch als eigene App ins Dock legen.</p>
+      <p style="margin-top:0">Einfach ${link(APP_URL, 'die App-Adresse')} in Safari oder Chrome öffnen, unter Einstellungen auf <b>Mit Dropbox verbinden</b> klicken und zulassen. Als eigene App installieren:</p>
+      <ul class="steps">
+        <li><b>Safari:</b> Menü <b>Ablage › Zum Dock hinzufügen</b>.</li>
+        <li><b>Chrome:</b> rechts in der Adressleiste auf das <b>Installieren-Symbol</b> (Bildschirm mit Pfeil) oder Menü <b>⋮ › Streamen, speichern und teilen › Seite als App installieren …</b> Die App liegt danach unter <b>Programme › Chrome-Apps</b>; ins Dock per Rechtsklick <b>› Optionen › Im Dock behalten</b>.</li>
+      </ul>
+      <p class="hint" style="margin-bottom:0">Die <code>index.html</code> im Dropbox-Ordner nicht direkt öffnen – sie leitet nur auf die Online-Version um.</p>
     </div>`;
 
   root.addEventListener('click', async e => {

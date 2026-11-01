@@ -99,13 +99,22 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
       const lines = doc.splitTextToSize(e.description || '–', descWidth);
       // Mehrtägige Einträge: Zeitraum zweizeilig in der Datumsspalte
       const end = entryEndDate(e);
-      const dateLines = end === e.date ? [fmtDate(e.date)] : [fmtDate(e.date), '– ' + fmtDate(end), `(${fmtDays(e.hours)})`];
+      const multiDay = end !== e.date;
+      const dateLines = multiDay ? [fmtDate(e.date), '– ' + fmtDate(end)] : [fmtDate(e.date)];
       const h = Math.max(lines.length, dateLines.length) * 4.6 + 2.4;
       ensureSpace(h);
       doc.text(dateLines, colDate, y, { lineHeightFactor: 1.15 });
       doc.text(KINDS[entryKind(e)], colKind, y);
       doc.text(lines, colDesc, y, { lineHeightFactor: 1.15 });
       doc.text(fmtHours(e.hours), colHours, y, { align: 'right' });
+      if (multiDay) {
+        // Tagesanzahl klein unter den Stunden
+        doc.setFontSize(8.5);
+        doc.setTextColor(...muted);
+        doc.text(fmtDays(e.hours), colHours, y + 4.6, { align: 'right' });
+        doc.setFontSize(10);
+        doc.setTextColor(...ink);
+      }
       doc.text(fmtMoney(amount), colAmount, y, { align: 'right' });
       y += h;
       doc.setDrawColor(...line);

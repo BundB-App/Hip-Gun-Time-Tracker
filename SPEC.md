@@ -63,6 +63,7 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - **Startseite:** Die App öffnet immer mit „Erfassen“. Vorausgewählt: Kunde, Projekt und Art (Ton/Video) des zuletzt erfassten Eintrags.
 - **Menü:** Erfassen · Stundenzettel · Kunden · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
 - **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt, Zeitraum „Alles“.
+- **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Das PDF enthält immer alle Projekte.
 
 ## 3a. Tagessätze & Beträge
 

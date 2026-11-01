@@ -615,7 +615,8 @@ function viewKunden(root) {
 }
 
 // ---------- Ansicht: Stundenzettel ----------
-const pdfUI = { clientId: '', projectId: '', ...monthRange(0) };
+// open: aufgeklappte Projekte der Vorschau; null = Standard (nur das jüngste Projekt offen)
+const pdfUI = { clientId: '', projectId: '', ...monthRange(0), open: null };
 
 function timesheetGroups() {
   const entries = store.all('entries')
@@ -626,7 +627,7 @@ function timesheetGroups() {
   const map = new Map();
   for (const e of entries) {
     const key = e.projectId || '';
-    if (!map.has(key)) map.set(key, { name: key ? projectName(key) : null, entries: [] });
+    if (!map.has(key)) map.set(key, { key, name: key ? projectName(key) : null, entries: [] });
     map.get(key).entries.push(e);
   }
   return [...map.values()].sort((a, b) => (a.name === null ? -1 : b.name === null ? 1 : a.name.localeCompare(b.name, 'de')));
@@ -659,10 +660,20 @@ function viewPdf(root) {
   const fromIn = root.querySelector('#p-from');
   const toIn = root.querySelector('#p-to');
 
-  clientSel.addEventListener('change', () => { pdfUI.clientId = clientSel.value; pdfUI.projectId = ''; update(); });
-  fromIn.addEventListener('change', () => { pdfUI.from = fromIn.value; update(); });
-  toIn.addEventListener('change', () => { pdfUI.to = toIn.value; update(); });
-  root.querySelector('#p-project').addEventListener('change', e => { pdfUI.projectId = e.target.value; update(); });
+  clientSel.addEventListener('change', () => { pdfUI.clientId = clientSel.value; pdfUI.projectId = ''; pdfUI.open = null; update(); });
+  fromIn.addEventListener('change', () => { pdfUI.from = fromIn.value; pdfUI.open = null; update(); });
+  toIn.addEventListener('change', () => { pdfUI.to = toIn.value; pdfUI.open = null; update(); });
+  root.querySelector('#p-project').addEventListener('change', e => { pdfUI.projectId = e.target.value; pdfUI.open = null; update(); });
+
+  // Projekt auf- bzw. zuklappen
+  root.querySelector('#preview').addEventListener('click', e => {
+    const head = e.target.closest('[data-toggle-group]');
+    if (!head) return;
+    const key = head.dataset.toggleGroup;
+    if (pdfUI.open.has(key)) pdfUI.open.delete(key);
+    else pdfUI.open.add(key);
+    update();
+  });
 
   root.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
     const r = b.dataset.range;
@@ -673,7 +684,7 @@ function viewPdf(root) {
         onEditEntry: editFromCalendar,
         onPickMonth: (clientId, range) => {
           if (clientId) pdfUI.clientId = clientId;
-          Object.assign(pdfUI, range);
+          Object.assign(pdfUI, range, { open: null });
           update();
         },
       });
@@ -685,6 +696,7 @@ function viewPdf(root) {
       : r === 'last' ? monthRange(-1)
       : r === 'year' ? { from: `${y}-01-01`, to: `${y}-12-31` }
       : { from: '', to: '' });
+    pdfUI.open = null;
     update();
   }));
 
@@ -731,15 +743,28 @@ function viewPdf(root) {
       preview.innerHTML = '<div class="empty">Keine Einträge für diesen Kunden im gewählten Zeitraum.</div>';
       return;
     }
-    const heads = groups.some(g => g.name);
+    // Jüngstes Projekt zuerst (letztes Arbeitsdatum, dann zuletzt erfasst)
+    const latest = g => g.entries.reduce((m, e) => {
+      const k = e.date + String(e.updatedAt || 0).padStart(15, '0');
+      return k > m ? k : m;
+    }, '');
+    const ordered = [...groups].sort((a, b) => latest(b).localeCompare(latest(a)));
+    if (!pdfUI.open) pdfUI.open = new Set([ordered[0].key]);
+    const single = ordered.length === 1;
     let total = 0, money = 0;
     let html = '<div class="list">';
-    for (const g of groups) {
+    for (const g of ordered) {
       const sum = g.entries.reduce((s, e) => s + e.hours, 0);
       const amount = sumAmount(g.entries);
       total += sum;
       money += amount;
-      if (heads) html += `<div class="group-head"><span>${esc(g.name || 'Ohne Projekt')}</span><span>${fmtHours(sum)} Std. · ${fmtMoney(amount)}</span></div>`;
+      const open = single || pdfUI.open.has(g.key);
+      html += `
+        <button class="group-head group-toggle${open ? ' open' : ''}" ${single ? 'disabled' : `data-toggle-group="${g.key}"`} aria-expanded="${open}">
+          <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span></span>
+          <span>${fmtHours(sum)} Std. · ${fmtMoney(amount)}</span>
+        </button>`;
+      if (!open) continue;
       html += g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
           <div class="sub" style="width:80px;flex:none">${fmtDate(e.date)}</div>
@@ -1071,7 +1096,7 @@ tabs.addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
   if (!b) return;
   if (b.dataset.view === 'pdf') {
-    Object.assign(pdfUI, { clientId: lastEnteredClientId(), projectId: '', from: '', to: '' });
+    Object.assign(pdfUI, { clientId: lastEnteredClientId(), projectId: '', from: '', to: '', open: null });
   }
   show(b.dataset.view);
   scrollTo({ top: 0 });

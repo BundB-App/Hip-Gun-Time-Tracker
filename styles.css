@@ -294,3 +294,17 @@ button.cal-d.video { color: #fff; }
 .client-detail .proj { flex-wrap: wrap; }
 .client-detail .proj .name { flex: 1 1 100%; min-width: 0; }
 @media (min-width: 560px) { .client-detail .proj .name { flex-basis: 0; } }
+
+/* ---------- Stundenzettel: Projekte zuklappbar ---------- */
+.group-toggle {
+  width: 100%; border-left: 0; border-right: 0; border-bottom: 0; font-family: inherit; text-align: left;
+  cursor: pointer; align-items: center; padding-top: 11px; padding-bottom: 11px; color: var(--text);
+}
+.group-toggle:disabled { cursor: default; }
+.group-toggle .chev { display: inline-block; width: 14px; margin-right: 4px; color: var(--muted); transition: transform .15s; }
+.group-toggle.open .chev { transform: rotate(90deg); }
+.group-toggle:disabled .chev { visibility: hidden; width: 0; margin: 0; }
+.group-toggle .count { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.group-toggle { gap: 10px; }
+.group-toggle > span:first-child { flex: 1; min-width: 0; }
+.group-toggle > span:last-child { white-space: nowrap; }

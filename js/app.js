@@ -3,12 +3,12 @@ import * as dbx from './dropbox.js';
 import { buildTimesheet, deliverPdf } from './pdf.js';
 import { openCalendar } from './calendar.js';
 import {
-  KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, entryAmount, sumAmount,
+  KINDS, getDefaultRates, saveDefaultRates, currentRates, entryKind, entryRateSet, entryAmount, sumAmount,
   setLabel, ratesLabel, sameSet, priceHistory, periodText, migratePrices, entryEndDate, dayTypeLabel,
 } from './rates.js';
 import {
   HOURS_PER_DAY, roundHalf, parseNumber, fmtHours, fmtNum, fmtDays, fmtMoney, fmtDate, fmtDateLong,
-  todayISO, monthRange, esc,
+  todayISO, esc,
 } from './format.js';
 
 const main = document.getElementById('main');
@@ -639,14 +639,13 @@ function viewKunden(root) {
 }
 
 // ---------- Ansicht: Stundenzettel ----------
-// open: aufgeklappte Projekte der Vorschau; null = Standard (nur das jüngste Projekt offen)
-const pdfUI = { clientId: '', projectId: '', ...monthRange(0), open: null };
+// open: aufgeklappte Projekte; null = Standard (nur das jüngste Projekt offen)
+const pdfUI = { clientId: '', open: null };
 
+// Alle Einträge des Kunden, nach Projekt gruppiert, jüngstes Projekt zuerst
 function timesheetGroups() {
   const entries = store.all('entries')
     .filter(e => e.clientId === pdfUI.clientId)
-    .filter(e => !pdfUI.projectId || e.projectId === pdfUI.projectId)
-    .filter(e => (!pdfUI.from || e.date >= pdfUI.from) && (!pdfUI.to || e.date <= pdfUI.to))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.updatedAt || 0) - (b.updatedAt || 0));
   const map = new Map();
   for (const e of entries) {
@@ -654,43 +653,44 @@ function timesheetGroups() {
     if (!map.has(key)) map.set(key, { key, name: key ? projectName(key) : null, entries: [] });
     map.get(key).entries.push(e);
   }
-  return [...map.values()].sort((a, b) => (a.name === null ? -1 : b.name === null ? 1 : a.name.localeCompare(b.name, 'de')));
+  const latest = g => g.entries.reduce((m, e) => {
+    const k = e.date + String(e.updatedAt || 0).padStart(15, '0');
+    return k > m ? k : m;
+  }, '');
+  return [...map.values()].sort((a, b) => latest(b).localeCompare(latest(a)));
+}
+
+// Tatsächlich verwendete Preise, z. B. „Ton 300/350 € · Video 400 €“
+function usedPricesText(entries) {
+  const seen = new Map();
+  for (const e of entries) {
+    const kind = entryKind(e);
+    const set = entryRateSet(e);
+    seen.set(`${kind}|${set.weekday}|${set.weekend}`, `${KINDS[kind]} ${setLabel(set)}`);
+  }
+  return [...seen.values()].sort().join(' · ');
 }
 
 function viewPdf(root) {
   root.innerHTML = `
     <h2>Stundenzettel</h2>
-    <div class="card">
-      <label class="field"><span>Kunde</span><select id="p-client"></select></label>
-      <div id="p-project"></div>
-      <div class="field"><span>Zeitraum</span>
-        <div class="chips" style="margin:0 0 10px">
-          <button class="chip" data-range="this">Dieser Monat</button>
-          <button class="chip" data-range="last">Letzter Monat</button>
-          <button class="chip" data-range="year">Dieses Jahr</button>
-          <button class="chip" data-range="all">Alles</button>
-          <button class="chip" data-range="calendar">${CAL_ICON} Kalender</button>
-        </div>
-        <div class="row">
-          <label class="field" style="margin:0"><span>Von</span><input type="date" id="p-from"></label>
-          <label class="field" style="margin:0"><span>Bis</span><input type="date" id="p-to"></label>
-        </div>
-      </div>
+    <div class="row" style="margin-bottom:14px">
+      <select id="p-client" aria-label="Kunde"></select>
+      <button class="btn grow-0" data-act="calendar" title="Jahreskalender">${CAL_ICON}</button>
     </div>
     <div id="preview"></div>
-    <button class="btn primary block" id="make-pdf">PDF erstellen</button>`;
+    <button class="btn primary block" id="make-pdf">PDF mit allen Projekten</button>`;
 
   const clientSel = root.querySelector('#p-client');
-  const fromIn = root.querySelector('#p-from');
-  const toIn = root.querySelector('#p-to');
+  clientSel.addEventListener('change', () => { pdfUI.clientId = clientSel.value; pdfUI.open = null; update(); });
 
-  clientSel.addEventListener('change', () => { pdfUI.clientId = clientSel.value; pdfUI.projectId = ''; pdfUI.open = null; update(); });
-  fromIn.addEventListener('change', () => { pdfUI.from = fromIn.value; pdfUI.open = null; update(); });
-  toIn.addEventListener('change', () => { pdfUI.to = toIn.value; pdfUI.open = null; update(); });
-  root.querySelector('#p-project').addEventListener('change', e => { pdfUI.projectId = e.target.value; pdfUI.open = null; update(); });
+  root.querySelector('[data-act=calendar]').addEventListener('click', () =>
+    openCalendar({ clientId: pdfUI.clientId, onEditEntry: editFromCalendar }));
 
-  // Projekt auf- bzw. zuklappen
   root.querySelector('#preview').addEventListener('click', e => {
+    const pdfBtn = e.target.closest('[data-pdf-project]');
+    if (pdfBtn) return makePdf(pdfBtn.dataset.pdfProject);
+    // Projekt auf- bzw. zuklappen
     const head = e.target.closest('[data-toggle-group]');
     if (!head) return;
     const key = head.dataset.toggleGroup;
@@ -699,60 +699,31 @@ function viewPdf(root) {
     update();
   });
 
-  root.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
-    const r = b.dataset.range;
-    if (r === 'calendar') {
-      // Monat im Kalender antippen übernimmt ihn als Zeitraum
-      openCalendar({
-        clientId: pdfUI.clientId,
-        onEditEntry: editFromCalendar,
-        onPickMonth: (clientId, range) => {
-          if (clientId) pdfUI.clientId = clientId;
-          Object.assign(pdfUI, range, { open: null });
-          update();
-        },
-      });
-      return;
-    }
-    const y = new Date().getFullYear();
-    Object.assign(pdfUI,
-      r === 'this' ? monthRange(0)
-      : r === 'last' ? monthRange(-1)
-      : r === 'year' ? { from: `${y}-01-01`, to: `${y}-12-31` }
-      : { from: '', to: '' });
-    pdfUI.open = null;
-    update();
-  }));
+  root.querySelector('#make-pdf').addEventListener('click', () => makePdf(null));
 
-  root.querySelector('#make-pdf').addEventListener('click', async () => {
-    const groups = timesheetGroups();
+  // projectKey = null: alle Projekte
+  async function makePdf(projectKey) {
+    const groups = timesheetGroups().filter(g => projectKey === null || g.key === projectKey);
     if (!groups.length) return;
+    // Zeitraum ergibt sich aus den enthaltenen Einträgen
+    const all = groups.flatMap(g => g.entries);
+    const from = all.reduce((m, e) => (e.date < m ? e.date : m), all[0].date);
+    const to = all.reduce((m, e) => { const end = entryEndDate(e); return end > m ? end : m; }, all[0].date);
     try {
       const name = clientName(pdfUI.clientId);
-      const doc = await buildTimesheet({ clientName: name, from: pdfUI.from, to: pdfUI.to, groups });
-      const slug = name.replace(/[^\wäöüÄÖÜß-]+/g, '_').replace(/^_|_$/g, '');
-      const period = pdfUI.from || pdfUI.to ? `${pdfUI.from || ''}_${pdfUI.to || ''}` : 'gesamt';
-      await deliverPdf(doc, `Stundenzettel_${slug}_${period}.pdf`);
+      const doc = await buildTimesheet({ clientName: name, from, to, groups });
+      const slug = t => t.replace(/[^\wäöüÄÖÜß-]+/g, '_').replace(/^_|_$/g, '');
+      const project = projectKey !== null && groups[0].name ? '_' + slug(groups[0].name) : '';
+      await deliverPdf(doc, `Stundenzettel_${slug(name)}${project}_${todayISO()}.pdf`);
     } catch (err) {
       console.error(err);
       toast('PDF konnte nicht erstellt werden');
     }
-  });
+  }
 
   function update() {
     clientSel.innerHTML = clientOptionsHtml(pdfUI.clientId, { placeholder: 'Kunde wählen …', includeArchived: true });
     clientSel.value = pdfUI.clientId;
-    fromIn.value = pdfUI.from;
-    toIn.value = pdfUI.to;
-
-    const projects = pdfUI.clientId ? store.projectsOf(pdfUI.clientId, { includeArchived: true }) : [];
-    root.querySelector('#p-project').innerHTML = projects.length ? `
-      <label class="field"><span>Projekt</span>
-        <select>
-          <option value="">Alle Projekte</option>
-          ${projects.map(p => `<option value="${p.id}"${p.id === pdfUI.projectId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
-        </select>
-      </label>` : '';
 
     const preview = root.querySelector('#preview');
     const button = root.querySelector('#make-pdf');
@@ -764,20 +735,15 @@ function viewPdf(root) {
     const groups = timesheetGroups();
     button.disabled = !groups.length;
     if (!groups.length) {
-      preview.innerHTML = '<div class="empty">Keine Einträge für diesen Kunden im gewählten Zeitraum.</div>';
+      preview.innerHTML = '<div class="empty">Für diesen Kunden gibt es noch keine Einträge.</div>';
       return;
     }
-    // Jüngstes Projekt zuerst (letztes Arbeitsdatum, dann zuletzt erfasst)
-    const latest = g => g.entries.reduce((m, e) => {
-      const k = e.date + String(e.updatedAt || 0).padStart(15, '0');
-      return k > m ? k : m;
-    }, '');
-    const ordered = [...groups].sort((a, b) => latest(b).localeCompare(latest(a)));
-    if (!pdfUI.open) pdfUI.open = new Set([ordered[0].key]);
-    const single = ordered.length === 1;
+    if (!pdfUI.open) pdfUI.open = new Set([groups[0].key]);
+    const single = groups.length === 1;
+    button.textContent = single ? 'PDF erstellen' : 'PDF mit allen Projekten';
     let total = 0, money = 0;
     let html = '<div class="list">';
-    for (const g of ordered) {
+    for (const g of groups) {
       const sum = g.entries.reduce((s, e) => s + e.hours, 0);
       const amount = sumAmount(g.entries);
       total += sum;
@@ -785,7 +751,8 @@ function viewPdf(root) {
       const open = single || pdfUI.open.has(g.key);
       html += `
         <button class="group-head group-toggle${open ? ' open' : ''}" ${single ? 'disabled' : `data-toggle-group="${g.key}"`} aria-expanded="${open}">
-          <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span></span>
+          <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span>
+            <span class="group-prices">${usedPricesText(g.entries)}</span></span>
           <span>${fmtHours(sum)} Std. · ${fmtMoney(amount)}</span>
         </button>`;
       if (!open) continue;
@@ -795,6 +762,7 @@ function viewPdf(root) {
           <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
           <div class="hours">${fmtHours(e.hours)}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
         </button>`).join('');
+      if (!single) html += `<div class="group-actions"><button class="btn small" data-pdf-project="${g.key}">PDF nur für dieses Projekt</button></div>`;
     }
     html += `</div><div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
     preview.innerHTML = html;
@@ -1120,7 +1088,7 @@ tabs.addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
   if (!b) return;
   if (b.dataset.view === 'pdf') {
-    Object.assign(pdfUI, { clientId: lastEnteredClientId(), projectId: '', from: '', to: '', open: null });
+    Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null });
   }
   show(b.dataset.view);
   scrollTo({ top: 0 });

@@ -329,3 +329,5 @@ button.cal-d.video { color: #fff; }
   .compact-form .chips { margin-top: 6px; }
   .date-field { flex-basis: 138px !important; }
 }
+.group-prices { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin: 2px 0 0 18px; }
+.group-actions { padding: 8px 14px 12px; border-top: 1px solid var(--line); text-align: right; }

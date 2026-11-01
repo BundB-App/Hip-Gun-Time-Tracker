@@ -63,8 +63,9 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - Beim Erfassen ist das zuletzt verwendete Projekt des Kunden vorausgewählt.
 - **Startseite:** Die App öffnet immer mit „Erfassen“. Vorausgewählt: Kunde, Projekt und Art (Ton/Video) des zuletzt erfassten Eintrags.
 - **Menü:** Erfassen · Stundenzettel · Kunden · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
-- **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt, Zeitraum „Alles“.
-- **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Das PDF enthält immer alle Projekte.
+- **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt. Es gibt keinen Zeitraum-Filter, es werden immer alle Einträge des Kunden gezeigt.
+- **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Die Projektüberschrift zeigt Anzahl, Stunden, Betrag und die tatsächlich verwendeten Preise.
+- **PDF:** „PDF mit allen Projekten“ oder im aufgeklappten Projekt „PDF nur für dieses Projekt“. Der Zeitraum im PDF ergibt sich aus erstem und letztem Eintrag.
 
 ## 3a. Tagessätze & Beträge
 
@@ -98,7 +99,7 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 ## 4. Stundenzettel-PDF (pro Kunde)
 
 - Kopf: **nur Logo** (`Stuff/logo.png`), keine Firmendaten.
-- Kundenname, Zeitraum.
+- Kundenname, Zeitraum (erster bis letzter enthaltener Eintrag).
 - Tabelle: Datum · Art · Beschreibung · Stunden · Betrag, falls vorhanden **gruppiert nach Projekt** mit Zwischensumme.
 - Gesamtsumme in Stunden (und Tagen) und Euro, Hinweis „zzgl. MwSt.“ und verwendete Tagessätze.
 - Kein Unterschriftsfeld.

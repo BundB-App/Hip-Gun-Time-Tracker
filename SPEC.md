@@ -134,5 +134,6 @@ Unter https://www.dropbox.com/developers/apps → deine App:
 ## 7. Status
 
 - Dropbox-App mit Access type „Full Dropbox“, App Key in `js/config.js`.
-- Daten: `Studio/Time Tracker/data/time-tracker.json` (per `.gitignore` nicht im öffentlichen Repo), Backups in `data/backups/`.
-- **Regel:** Alles, was zum Projekt gehört, liegt ausschließlich in `Studio/Time Tracker`.
+- Projektordner: `Dropbox/Apps/Time Tracker` (seit 01.11.2026; vorher `Studio/Time Tracker`). `Dropbox/Apps` sammelt alle eigenen Apps.
+- Daten: `Apps/Time Tracker/data/time-tracker.json` (per `.gitignore` nicht im öffentlichen Repo).
+- **Regel:** Alles, was zum Projekt gehört, liegt ausschließlich in `Dropbox/Apps/Time Tracker`.

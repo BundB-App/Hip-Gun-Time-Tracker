@@ -10,11 +10,15 @@ const LAST_SYNC_KEY = 'ht.lastSync';
 const LEGACY_APP_KEY = '3v7vqssyf0j853r';
 
 // ---------- Einstellungen ----------
+function configId() {
+  return `${CONFIG.dropboxAppKey}|${CONFIG.dataPath}`;
+}
+
 export function getSettings() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch {}
-  // Gespeicherte Werte gelten nur, solange die App-Konfiguration dieselbe ist
-  if (saved.base !== CONFIG.dropboxAppKey) saved = {};
+  // Gespeicherte Werte gelten nur, solange die App-Konfiguration (Key und Datenpfad) dieselbe ist
+  if (saved.base !== configId()) saved = {};
   return {
     appKey: saved.appKey || CONFIG.dropboxAppKey,
     dataPath: saved.dataPath || CONFIG.dataPath,
@@ -22,7 +26,7 @@ export function getSettings() {
 }
 
 export function saveSettings(patch) {
-  const next = { ...getSettings(), ...patch, base: CONFIG.dropboxAppKey };
+  const next = { ...getSettings(), ...patch, base: configId() };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
   return next;
 }

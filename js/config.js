@@ -3,6 +3,6 @@
 export const CONFIG = {
   // Dropbox-App mit Access type „Full Dropbox“, damit die Daten im Projektordner liegen
   dropboxAppKey: '2f7ccxlefgehb4g',
-  // Projektordner in der Dropbox; data/ ist per .gitignore vom öffentlichen Repo ausgeschlossen
-  dataPath: '/Studio/Time Tracker/data/time-tracker.json',
+  // App-Ordner in der Dropbox (Dropbox/Apps/Time Tracker); data/ ist per .gitignore vom öffentlichen Repo ausgeschlossen
+  dataPath: '/Apps/Time Tracker/data/time-tracker.json',
 };

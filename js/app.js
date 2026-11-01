@@ -971,7 +971,7 @@ function viewAnleitung(root) {
         <li>In der App unten auf <b>Einstellungen</b> tippen.</li>
         <li><b>Code bei Dropbox holen</b> tippen. Es öffnet sich die Dropbox-Anmeldung.</li>
         <li>Bei Dropbox anmelden. Bei der Warnung „Bevor Sie diese App verknüpfen …“ auf <b>Weiter</b> tippen.</li>
-        <li>Auf <b>Zulassen</b> tippen. Die App speichert ihre Daten ausschließlich im Ordner <b>Studio › Time Tracker › data</b>.</li>
+        <li>Auf <b>Zulassen</b> tippen. Die App speichert ihre Daten ausschließlich im Ordner <b>Apps › Time Tracker › data</b>.</li>
         <li>Dropbox zeigt einen <b>Zugriffscode</b>. Den Code kopieren (lange drücken → Kopieren).</li>
         <li>Das Dropbox-Fenster schließen (<b>Fertig</b> oben links) bzw. zurück zur Time-Tracker-App wechseln.</li>
         <li>Den Code in das Feld <b>Code einfügen</b> einsetzen und auf <b>Bestätigen</b> tippen.</li>
@@ -980,7 +980,7 @@ function viewAnleitung(root) {
 
     ${step(5, 'Fertig, kurz prüfen', `
       <p>Oben rechts steht jetzt <span class="badge">Synchronisiert</span>. Kunden und Einträge, die bereits auf einem anderen Gerät erfasst wurden, erscheinen nach wenigen Sekunden.</p>
-      <p class="hint">Die Daten liegen als <code>time-tracker.json</code> im Ordner <b>Dropbox › Studio › Time Tracker › data</b>.</p>`)}
+      <p class="hint">Die Daten liegen als <code>time-tracker.json</code> im Ordner <b>Dropbox › Apps › Time Tracker › data</b>.</p>`)}
 
     <div class="card">
       <h3 style="margin-top:0">Gut zu wissen</h3>

@@ -66,7 +66,7 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - **Löschen:** Kunde bzw. Projekt wird mit allen zugehörigen Projekten und Einträgen gelöscht, nach Sicherheitsabfrage mit Anzahl. Archivieren gibt es nicht (bei 5–10 Projekten pro Kunde unnötig).
 - **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt. Es gibt keinen Zeitraum-Filter, es werden immer alle Einträge des Kunden gezeigt.
 - **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Die Projektüberschrift zeigt Anzahl, Stunden, Betrag und die tatsächlich verwendeten Preise.
-- **Anzeige:** Stunden mit „h“; mehrtägige Einträge zeigen unter dem Zeitraum die Tagesanzahl (auch im PDF).
+- **Anzeige:** Stunden mit „h“ (groß, fett); bei mehrtägigen Einträgen darunter die Tagesanzahl, dann der Betrag (beide klein). Im PDF steht die Tagesanzahl unter dem Zeitraum.
 - **PDF:** „PDF mit allen Projekten“ oder im aufgeklappten Projekt „PDF nur für dieses Projekt“. Der Zeitraum im PDF ergibt sich aus erstem und letztem Eintrag.
 
 ## 3a. Tagessätze & Beträge

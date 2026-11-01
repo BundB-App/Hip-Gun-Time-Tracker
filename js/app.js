@@ -709,9 +709,9 @@ function viewPdf(root) {
       if (!open) continue;
       html += g.entries.length ? g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
-          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}${entryEndDate(e) !== e.date ? `<div class="days">${fmtDays(e.hours)}</div>` : ''}</div>
+          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
           <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
-          <div class="hours">${fmtHours(e.hours)} h<div class="money">${fmtMoney(entryAmount(e))}</div></div>
+          <div class="hours">${fmtHours(e.hours)} h${entryEndDate(e) !== e.date ? `<div class="money">${fmtDays(e.hours)}</div>` : ''}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
         </button>`).join('') : '<div class="empty" style="padding:14px">Noch keine Einträge in diesem Projekt.</div>';
       if (p) {
         html += `

@@ -87,15 +87,15 @@ class Store {
     return this.doc[collection].find(r => r.id === id && !r.deleted) || null;
   }
 
-  clients({ includeArchived = false } = {}) {
+  // Archivieren gibt es nicht mehr; ein altes archived-Flag wird ignoriert
+  clients() {
     return this.all('clients')
-      .filter(c => includeArchived || !c.archived)
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
 
-  projectsOf(clientId, { includeArchived = false } = {}) {
+  projectsOf(clientId) {
     return this.all('projects')
-      .filter(p => p.clientId === clientId && (includeArchived || !p.archived))
+      .filter(p => p.clientId === clientId)
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
 

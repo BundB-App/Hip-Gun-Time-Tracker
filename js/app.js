@@ -49,16 +49,15 @@ function recentClientIds() {
 function createClient() {
   const name = prompt('Name des neuen Kunden:')?.trim();
   if (!name) return null;
-  const existing = store.clients({ includeArchived: true }).find(c => c.name.toLowerCase() === name.toLowerCase());
+  const existing = store.clients().find(c => c.name.toLowerCase() === name.toLowerCase());
   if (existing) {
-    if (existing.archived) store.upsert('clients', { id: existing.id, archived: false });
     toast(`„${existing.name}“ gibt es schon`);
     return existing;
   }
-  const c = store.upsert('clients', { name, archived: false, rates: getDefaultRates() });
+  const c = store.upsert('clients', { name, rates: getDefaultRates() });
   // Jeder Kunde hat mindestens ein Projekt; der Name lässt sich später im Stundenzettel ändern
   const projectName = prompt(`Erstes Projekt für ${name}:`, 'Projekt 1')?.trim() || 'Projekt 1';
-  store.upsert('projects', { clientId: c.id, name: projectName, archived: false, rates: getDefaultRates() });
+  store.upsert('projects', { clientId: c.id, name: projectName, rates: getDefaultRates() });
   toast(`Kunde „${name}“ mit Projekt „${projectName}“ angelegt`);
   return c;
 }
@@ -90,19 +89,16 @@ function lastEnteredKind() {
 function createProject(clientId) {
   const name = prompt(`Neues Projekt für ${clientName(clientId)}:`)?.trim();
   if (!name) return null;
-  const p = store.upsert('projects', { clientId, name, archived: false, rates: getDefaultRates() });
+  const p = store.upsert('projects', { clientId, name, rates: getDefaultRates() });
   toast(`Projekt „${name}“ angelegt`);
   return p;
 }
 
-function clientOptionsHtml(selectedId, { placeholder, withNew = false, includeArchived = false } = {}) {
-  const active = store.clients({ includeArchived });
+function clientOptionsHtml(selectedId, { placeholder, withNew = false } = {}) {
+  const active = store.clients();
   const recent = recentClientIds().filter(id => active.some(c => c.id === id)).slice(0, 5);
-  const opt = c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${esc(c.name)}${c.archived ? ' (archiviert)' : ''}</option>`;
+  const opt = c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${esc(c.name)}</option>`;
   let html = placeholder !== undefined ? `<option value="">${esc(placeholder)}</option>` : '';
-  // Ein archivierter Kunde eines bearbeiteten Eintrags muss wählbar bleiben
-  const sel = store.get('clients', selectedId);
-  if (sel && !active.includes(sel)) html += opt(sel);
   if (recent.length >= 3 && active.length > 6) {
     html += `<optgroup label="Zuletzt verwendet">${recent.map(id => opt(active.find(c => c.id === id)).replace(' selected', '')).join('')}</optgroup>`;
     html += `<optgroup label="Alle Kunden">${active.map(opt).join('')}</optgroup>`;
@@ -503,7 +499,7 @@ function timesheetGroups() {
     .filter(e => e.clientId === pdfUI.clientId)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.updatedAt || 0) - (b.updatedAt || 0));
   const map = new Map();
-  for (const p of store.projectsOf(pdfUI.clientId, { includeArchived: true })) {
+  for (const p of store.projectsOf(pdfUI.clientId)) {
     map.set(p.id, { key: p.id, name: p.name, project: p, entries: [] });
   }
   for (const e of entries) {
@@ -586,17 +582,15 @@ function viewPdf(root) {
         if (name) store.upsert('clients', { id: client.id, name });
         break;
       }
-      case 'client-archive':
-        store.upsert('clients', { id: client.id, archived: !client.archived });
-        toast(client.archived ? 'Kunde reaktiviert' : 'Kunde archiviert – erscheint beim Erfassen nicht mehr');
-        break;
       case 'client-delete': {
-        if (store.all('entries').some(x => x.clientId === client.id)) {
-          return toast('Kunde hat Einträge, bitte stattdessen archivieren');
-        }
-        if (!confirm(`Kunden „${client.name}“ endgültig löschen?`)) return;
-        store.projectsOf(client.id, { includeArchived: true }).forEach(p => store.remove('projects', p.id));
+        // Löscht den Kunden mit allen Projekten und Einträgen
+        const entries = store.all('entries').filter(x => x.clientId === client.id);
+        const projects = store.projectsOf(client.id);
+        if (!confirm(`Kunden „${client.name}“ mit ${projects.length} ${projects.length === 1 ? 'Projekt' : 'Projekten'} und ${entries.length} ${entries.length === 1 ? 'Eintrag' : 'Einträgen'} endgültig löschen?\n\nDas lässt sich nicht rückgängig machen.`)) return;
+        entries.forEach(x => store.remove('entries', x.id));
+        projects.forEach(x => store.remove('projects', x.id));
         store.remove('clients', client.id);
+        toast(`Kunde „${client.name}“ gelöscht`);
         Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null, menu: false });
         update();
         break;
@@ -615,10 +609,15 @@ function viewPdf(root) {
         if (name) store.upsert('projects', { id, name });
         break;
       }
-      case 'project-archive': {
+      case 'project-delete': {
+        // Löscht das Projekt mit allen seinen Einträgen
         const p = store.get('projects', id);
-        store.upsert('projects', { id, archived: !p.archived });
-        toast(p.archived ? 'Projekt reaktiviert' : 'Projekt archiviert – erscheint beim Erfassen nicht mehr');
+        const entries = store.all('entries').filter(x => x.projectId === id);
+        if (!confirm(`Projekt „${p.name}“ mit ${entries.length} ${entries.length === 1 ? 'Eintrag' : 'Einträgen'} endgültig löschen?\n\nDas lässt sich nicht rückgängig machen.`)) return;
+        entries.forEach(x => store.remove('entries', x.id));
+        store.remove('projects', id);
+        pdfUI.open = null;
+        toast(`Projekt „${p.name}“ gelöscht`);
         break;
       }
       case 'project-price':
@@ -667,16 +666,14 @@ function viewPdf(root) {
         <button class="menu-item" data-act="client-new">+ Neuer Kunde</button>
         ${client ? `
           <button class="menu-item" data-act="client-rename">„${esc(client.name)}“ umbenennen</button>
-          <button class="menu-item" data-act="client-archive">${client.archived ? 'Kunde reaktivieren' : 'Kunde archivieren'}
-            <span class="hint">${client.archived ? 'Erscheint wieder beim Erfassen' : 'Blendet ihn beim Erfassen aus, Einträge bleiben erhalten'}</span></button>
           <button class="menu-item danger" data-act="client-delete">Kunde löschen
-            <span class="hint">Nur möglich, solange er keine Einträge hat</span></button>` : ''}
+            <span class="hint">Mit allen Projekten und Einträgen</span></button>` : ''}
         <button class="menu-item" data-act="calendar-all">${CAL_ICON} Kalender aller Kunden</button>
       </div>`;
   }
 
   function update() {
-    clientSel.innerHTML = clientOptionsHtml(pdfUI.clientId, { placeholder: 'Kunde wählen …', includeArchived: true });
+    clientSel.innerHTML = clientOptionsHtml(pdfUI.clientId, { placeholder: 'Kunde wählen …' });
     clientSel.value = pdfUI.clientId;
     const client = store.get('clients', pdfUI.clientId);
     renderMenu(client);
@@ -706,16 +703,15 @@ function viewPdf(root) {
       html += `
         <button class="group-head group-toggle${open ? ' open' : ''}" data-toggle-group="${g.key}" aria-expanded="${open}">
           <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span>
-            ${p?.archived ? '<span class="badge grey">archiviert</span>' : ''}
             <span class="group-prices">${g.entries.length ? usedPricesText(g.entries) : (p ? 'Preis: ' + ratesLabel(currentRates(pdfUI.clientId, p.id)) : '')}</span></span>
-          <span>${g.entries.length ? `${fmtHours(sum)} Std. · ${fmtMoney(amount)}` : ''}</span>
+          <span>${g.entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}</span>
         </button>`;
       if (!open) continue;
       html += g.entries.length ? g.entries.map(e => `
         <button class="list-item" data-edit="${e.id}">
-          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
+          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}${entryEndDate(e) !== e.date ? `<div class="days">${fmtDays(e.hours)}</div>` : ''}</div>
           <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
-          <div class="hours">${fmtHours(e.hours)}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
+          <div class="hours">${fmtHours(e.hours)} h<div class="money">${fmtMoney(entryAmount(e))}</div></div>
         </button>`).join('') : '<div class="empty" style="padding:14px">Noch keine Einträge in diesem Projekt.</div>';
       if (p) {
         html += `
@@ -723,7 +719,7 @@ function viewPdf(root) {
             ${g.entries.length && withEntries.length > 1 ? `<button class="btn small" data-act="project-pdf" data-id="${p.id}">PDF nur dieses Projekt</button>` : ''}
             <button class="btn small" data-act="project-price" data-id="${p.id}">Preis ändern</button>
             <button class="btn small" data-act="project-rename" data-id="${p.id}">Umbenennen</button>
-            <button class="btn small" data-act="project-archive" data-id="${p.id}">${p.archived ? 'Reaktivieren' : 'Archivieren'}</button>
+            <button class="btn small danger" data-act="project-delete" data-id="${p.id}">Löschen</button>
           </div>
           ${pdfUI.priceEdit === p.id ? `
             <div class="group-price-edit">
@@ -739,7 +735,7 @@ function viewPdf(root) {
     html += `</div>
       <div class="add-project"><button class="link" data-act="project-new">+ Neues Projekt für ${esc(client.name)}</button></div>`;
     if (withEntries.length) {
-      html += `<div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} Std. (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+      html += `<div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} h (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
     }
     preview.innerHTML = html;
   }
@@ -755,7 +751,7 @@ function viewEinstellungen(root) {
     const connected = dbx.isConnected();
     const last = dbx.lastSyncAt();
     const codeFirst = dbx.prefersCodeFlow();
-    const counts = { k: store.clients({ includeArchived: true }).length, e: store.all('entries').length };
+    const counts = { k: store.clients().length, e: store.all('entries').length };
     const rates = getDefaultRates();
 
     const codeFlow = `

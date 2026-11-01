@@ -22,7 +22,6 @@ Kunde
 |---|---|---|
 | id | string | |
 | name | string | |
-| archived | bool | inaktive Kunden ausblenden (bei 10–50 Kunden sinnvoll) |
 | rates | {ton, video} | aktueller Preis des Kunden, beim Anlegen = Voreinstellung |
 
 ### Projekt
@@ -31,7 +30,6 @@ Kunde
 | id | string | |
 | clientId | string | gehört zu diesem Kunden |
 | name | string | |
-| archived | bool | |
 | rates | {ton, video} | Preis des Projekts, beim Anlegen = damalige Voreinstellung |
 
 Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und ggf. `deleted` für den Sync.
@@ -57,16 +55,18 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - **Erfassung nur manuell** (kein Live-Timer): Datum + Art (Ton/Video) + Dauer + Beschreibung.
 - Dauer wahlweise in **Stunden** oder **Tagen** eingeben. **1 Tag = 8 Std.**
 - Schnellwahl: 1–8 Std. bzw. 0,5 und 1–8 Tage.
+- Kommazahlen sind Dezimalwerte: 3,5 Std. = 3 Std. 30 Min.; 1,5 Tage = 12 Std.
 - **Rundung auf 30 Minuten** (0,5 Std.).
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
 - **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind im Stundenzettel jederzeit änderbar.
 - Beim Erfassen ist das zuletzt verwendete Projekt des Kunden vorausgewählt.
 - **Startseite:** Die App öffnet immer mit „Erfassen“. Vorausgewählt: Kunde, Projekt und Art (Ton/Video) des zuletzt erfassten Eintrags.
 - **Menü:** Erfassen · Stundenzettel · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
-- **Kunden- und Projektverwaltung im Stundenzettel:** „…“-Menü neben der Kundenauswahl (Neuer Kunde, Umbenennen, Archivieren/Reaktivieren, Löschen ohne Einträge, Kalender aller Kunden). Im aufgeklappten Projekt: PDF nur dieses Projekt, Preis ändern, Umbenennen, Archivieren. Projekte ohne Einträge werden ebenfalls gezeigt, darunter „+ Neues Projekt“.
-- **Archivieren** blendet Kunde bzw. Projekt beim Erfassen aus. Nichts wird gelöscht; im Stundenzettel bleiben sie sichtbar (markiert) und lassen sich reaktivieren.
+- **Kunden- und Projektverwaltung im Stundenzettel:** „…“-Menü neben der Kundenauswahl (Neuer Kunde, Umbenennen, Löschen, Kalender aller Kunden). Im aufgeklappten Projekt: PDF nur dieses Projekt, Preis ändern, Umbenennen, Löschen. Projekte ohne Einträge werden ebenfalls gezeigt, darunter „+ Neues Projekt“.
+- **Löschen:** Kunde bzw. Projekt wird mit allen zugehörigen Projekten und Einträgen gelöscht, nach Sicherheitsabfrage mit Anzahl. Archivieren gibt es nicht (bei 5–10 Projekten pro Kunde unnötig).
 - **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt. Es gibt keinen Zeitraum-Filter, es werden immer alle Einträge des Kunden gezeigt.
 - **Stundenzettel-Vorschau:** Projekte sind zuklappbar, sortiert nach jüngster Arbeit. Das jüngste ist aufgeklappt, ältere sind zugeklappt. Die Projektüberschrift zeigt Anzahl, Stunden, Betrag und die tatsächlich verwendeten Preise.
+- **Anzeige:** Stunden mit „h“; mehrtägige Einträge zeigen unter dem Zeitraum die Tagesanzahl (auch im PDF).
 - **PDF:** „PDF mit allen Projekten“ oder im aufgeklappten Projekt „PDF nur für dieses Projekt“. Der Zeitraum im PDF ergibt sich aus erstem und letztem Eintrag.
 
 ## 3a. Tagessätze & Beträge

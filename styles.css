@@ -343,3 +343,4 @@ button.cal-d.video { color: #fff; }
 .menu-item .hint { display: block; margin: 2px 0 0; font-size: 12px; }
 .menu-item.danger { color: var(--danger); }
 .menu-item:hover { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
+.list-item .days { margin-top: 3px; font-weight: 600; color: var(--text); }

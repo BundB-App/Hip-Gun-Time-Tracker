@@ -33,7 +33,7 @@ export function openCalendar({ clientId = '', onEditEntry, onPickMonth } = {}) {
   document.body.classList.add('modal-open');
 
   const select = backdrop.querySelector('#cal-client');
-  const clients = store.clients({ includeArchived: true });
+  const clients = store.clients();
   select.innerHTML = '<option value="">Alle Kunden</option>' +
     clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   select.value = state.clientId;

@@ -99,7 +99,7 @@ export async function buildTimesheet({ clientName, from, to, groups }) {
       const lines = doc.splitTextToSize(e.description || '–', descWidth);
       // Mehrtägige Einträge: Zeitraum zweizeilig in der Datumsspalte
       const end = entryEndDate(e);
-      const dateLines = end === e.date ? [fmtDate(e.date)] : [fmtDate(e.date), '– ' + fmtDate(end)];
+      const dateLines = end === e.date ? [fmtDate(e.date)] : [fmtDate(e.date), '– ' + fmtDate(end), `(${fmtDays(e.hours)})`];
       const h = Math.max(lines.length, dateLines.length) * 4.6 + 2.4;
       ensureSpace(h);
       doc.text(dateLines, colDate, y, { lineHeightFactor: 1.15 });

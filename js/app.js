@@ -73,9 +73,18 @@ function defaultProjectId(clientId) {
   return [...active].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]?.id || null;
 }
 
+function lastEntered() {
+  return store.all('entries').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] || null;
+}
+
 // Kunde des zuletzt erfassten Eintrags
 function lastEnteredClientId() {
-  return store.all('entries').sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]?.clientId || '';
+  return lastEntered()?.clientId || '';
+}
+
+function lastEnteredKind() {
+  const e = lastEntered();
+  return e ? entryKind(e) : 'ton';
 }
 
 function createProject(clientId) {
@@ -140,13 +149,14 @@ main.addEventListener('click', e => {
 });
 
 // ---------- Ansicht: Erfassen ----------
-const draft = { editingId: null, returnTo: null, unit: 'h', kind: 'ton', date: null, clientId: null, projectId: null };
+const draft = { editingId: null, returnTo: null, unit: 'h', kind: null, date: null, clientId: null, projectId: null };
 
 function viewErfassen(root) {
   const editing = draft.editingId ? store.get('entries', draft.editingId) : null;
   if (!editing) draft.editingId = null;
   let unit = editing ? (editing.unit || 'h') : draft.unit;
-  let kind = editing ? entryKind(editing) : draft.kind;
+  // Ohne eigene Wahl in dieser Sitzung: Art des zuletzt erfassten Eintrags
+  let kind = editing ? entryKind(editing) : draft.kind || lastEnteredKind();
 
   root.innerHTML = `
     <h2>${editing ? 'Eintrag bearbeiten' : 'Zeit erfassen'}</h2>
@@ -190,7 +200,8 @@ function viewErfassen(root) {
   let prices;
 
   f.date.value = editing?.date || draft.date || todayISO();
-  const initialClient = editing?.clientId || draft.clientId || recentClientIds()[0] || '';
+  // Vorauswahl: zuletzt erfasster Kunde; dessen zuletzt verwendetes Projekt wählt renderProject()
+  const initialClient = editing?.clientId || draft.clientId || lastEnteredClientId();
   if (editing) {
     f.amount.value = fmtHours(unit === 'd' ? editing.hours / HOURS_PER_DAY : editing.hours);
     f.description.value = editing.description || '';
@@ -423,9 +434,12 @@ function viewErfassen(root) {
   }
 
   return () => {
-    const keepClient = f.client.value;
-    renderClients(keepClient);
+    // Kommen Daten erst per Sync an, die Vorauswahl nachholen
+    const empty = !f.client.value && !editing;
+    renderClients(empty ? lastEnteredClientId() : f.client.value);
+    lastClient = f.client.value;
     renderProject();
+    if (empty && f.client.value) loadPrices();
     renderRecent();
   };
 }
@@ -1112,9 +1126,9 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service Worker', err));
 }
 
-// Beim Start immer mit der Kundenübersicht beginnen
+// Beim Start immer mit der Erfassung beginnen
 if (!dbx.isConnected()) migratePrices();
-show('kunden');
+show('erfassen');
 updatePill();
 window.__appReady = true;
 

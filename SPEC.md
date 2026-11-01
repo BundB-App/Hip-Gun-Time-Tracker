@@ -60,8 +60,8 @@ Alle Datensätze (Kunde, Projekt, Eintrag, Einstellung) tragen `updatedAt` und g
 - Summen werden in Stunden angezeigt, zusätzlich in Tagen (Std. ÷ 8).
 - **Jeder Eintrag gehört zu einem Projekt.** Beim Anlegen eines Kunden wird sofort ein erstes Projekt angelegt (Name abgefragt, Vorschlag „Projekt 1“). Projektnamen sind auf der Kunden-Seite jederzeit änderbar.
 - Beim Erfassen ist das zuletzt verwendete Projekt des Kunden vorausgewählt.
-- **Startseite:** Die App öffnet immer mit der Kundenübersicht.
-- **Menü:** Erfassen · Kunden · Stundenzettel · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
+- **Startseite:** Die App öffnet immer mit „Erfassen“. Vorausgewählt: Kunde, Projekt und Art (Ton/Video) des zuletzt erfassten Eintrags.
+- **Menü:** Erfassen · Stundenzettel · Kunden · Einstellungen. Einträge werden über Stundenzettel, Kalender oder „Zuletzt erfasst“ bearbeitet.
 - **Stundenzettel:** Beim Öffnen über den Tab ist der Kunde des zuletzt erfassten Eintrags gewählt, Zeitraum „Alles“.
 
 ## 3a. Tagessätze & Beträge

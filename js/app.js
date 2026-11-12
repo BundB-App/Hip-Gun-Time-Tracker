@@ -605,10 +605,10 @@ function readPriceEditor(container) {
 }
 
 // ---------- Ansicht: Stundenzettel (inkl. Kunden- und Projektverwaltung) ----------
-// clientId: '' = Übersicht aller Kunden und Projekte
+// clientId: '' = Übersicht aller Kunden und Projekte; overviewOpen: dort aufgeklappte Kunden
 // open: aufgeklappte Projekte; null = Standard (nur das jüngste Projekt offen)
 // menu: Kundenmenü offen; priceEdit: Projekt, dessen Preis gerade bearbeitet wird
-const pdfUI = { clientId: '', open: null, menu: false, priceEdit: null };
+const pdfUI = { clientId: '', overviewOpen: new Set(), open: null, menu: false, priceEdit: null };
 
 // Alle Projekte des Kunden mit ihren Einträgen, jüngstes Projekt zuerst, leere Projekte am Ende
 function timesheetGroups(clientId = pdfUI.clientId) {
@@ -668,6 +668,14 @@ function viewPdf(root) {
   root.addEventListener('click', e => {
     const t = e.target.closest('[data-act]');
     if (!t) {
+      // Kunde in der Übersicht auf- bzw. zuklappen
+      const clientHead = e.target.closest('[data-toggle-client]');
+      if (clientHead) {
+        const id = clientHead.dataset.toggleClient;
+        if (pdfUI.overviewOpen.has(id)) pdfUI.overviewOpen.delete(id);
+        else pdfUI.overviewOpen.add(id);
+        return update();
+      }
       // Projekt auf- bzw. zuklappen
       const head = e.target.closest('[data-toggle-group]');
       if (!head) return;
@@ -806,7 +814,7 @@ function viewPdf(root) {
       </div>`;
   }
 
-  // Übersicht: alle Kunden mit ihren Projekten, zuletzt bearbeitete Kunden oben
+  // Übersicht: alle Kunden, zuletzt bearbeitete oben; aufgeklappt zeigen sie ihre Projekte
   function renderOverview(preview) {
     const recent = recentClientIds();
     const rank = c => { const i = recent.indexOf(c.id); return i < 0 ? Infinity : i; };
@@ -824,11 +832,13 @@ function viewPdf(root) {
       const amount = sumAmount(entries);
       total += sum;
       money += amount;
+      const open = pdfUI.overviewOpen.has(c.id);
       html += `
-        <button class="group-head overview-client" data-act="open-client" data-client="${c.id}">
-          <span>${esc(c.name)}</span>
-          <span>${entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}<span class="chev">›</span></span>
+        <button class="group-head group-toggle overview-client${open ? ' open' : ''}" data-toggle-client="${c.id}" aria-expanded="${open}">
+          <span><span class="chev">›</span>${esc(c.name)} <span class="count">${groups.length}</span></span>
+          <span>${entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}</span>
         </button>`;
+      if (!open) continue;
       html += groups.map(g => {
         const gSum = g.entries.reduce((s, e) => s + e.hours, 0);
         const last = g.entries.length ? g.entries[g.entries.length - 1] : null;
@@ -841,6 +851,7 @@ function viewPdf(root) {
             ${g.entries.length ? `<div class="hours">${fmtHours(gSum)} h<div class="money">${fmtMoney(sumAmount(g.entries))}</div></div>` : ''}
           </button>`;
       }).join('');
+      html += `<div class="overview-open"><button class="link" data-act="open-client" data-client="${c.id}">Stundenzettel von ${esc(c.name)} öffnen ›</button></div>`;
     }
     html += '</div>';
     if (total) {
@@ -1248,7 +1259,7 @@ tabs.addEventListener('click', e => {
   if (!b) return;
   // Stundenzettel beginnt immer mit der Übersicht aller Kunden
   if (b.dataset.view === 'pdf') {
-    Object.assign(pdfUI, { clientId: '', open: null, menu: false, priceEdit: null });
+    Object.assign(pdfUI, { clientId: '', overviewOpen: new Set(), open: null, menu: false, priceEdit: null });
   }
   show(b.dataset.view);
   scrollTo({ top: 0 });

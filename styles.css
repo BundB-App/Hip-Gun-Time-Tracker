@@ -138,6 +138,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #1d1d1b; }
 .btn.danger { color: var(--danger); }
 .btn.block { width: 100%; }
+/* hidden-Attribut gilt auch für Elemente mit eigenem display (z. B. .btn) */
+[hidden] { display: none !important; }
 .btn.small { padding: 7px 11px; font-size: 13px; }
 .btn:disabled { opacity: .5; cursor: default; }
 .link { background: none; border: 0; color: var(--accent-ink); font: inherit; font-size: 14px; padding: 4px 0; cursor: pointer; font-weight: 500; }
@@ -370,7 +372,8 @@ button.cal-d.video { color: #fff; }
   width: 100%; border-left: 0; border-right: 0; border-bottom: 0; font-family: inherit; text-align: left;
   cursor: pointer; align-items: center; padding-top: 10px; padding-bottom: 10px; color: var(--text); font-size: 14px;
 }
-.overview-client .chev { margin-left: 8px; color: var(--muted); }
+.overview .list-item { padding-left: 32px; }
+.overview-open { padding: 4px 14px 10px 32px; border-top: 1px solid var(--line); }
 .overview .list-item { padding-top: 9px; padding-bottom: 9px; }
 .overview .list-item .title { font-weight: 500; }
 .back-link { margin: -4px 0 6px; }

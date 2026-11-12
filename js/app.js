@@ -46,8 +46,9 @@ function recentClientIds() {
   return ids;
 }
 
-function createClient() {
-  const name = prompt('Name des neuen Kunden:')?.trim();
+// name: aus dem Suchfeld übernommen; ohne Namen wird danach gefragt
+function createClient(name) {
+  name = (name ?? prompt('Name des neuen Kunden:'))?.trim();
   if (!name) return null;
   const existing = store.clients().find(c => c.name.toLowerCase() === name.toLowerCase());
   if (existing) {
@@ -94,19 +95,136 @@ function createProject(clientId) {
   return p;
 }
 
-function clientOptionsHtml(selectedId, { placeholder, withNew = false } = {}) {
-  const active = store.clients();
-  const recent = recentClientIds().filter(id => active.some(c => c.id === id)).slice(0, 5);
-  const opt = c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${esc(c.name)}</option>`;
-  let html = placeholder !== undefined ? `<option value="">${esc(placeholder)}</option>` : '';
-  if (recent.length >= 3 && active.length > 6) {
-    html += `<optgroup label="Zuletzt verwendet">${recent.map(id => opt(active.find(c => c.id === id)).replace(' selected', '')).join('')}</optgroup>`;
-    html += `<optgroup label="Alle Kunden">${active.map(opt).join('')}</optgroup>`;
-  } else {
-    html += active.map(opt).join('');
+// Für die Suche: klein, ohne Akzente („Köhler“ findet sich auch mit „kohler“)
+function searchKey(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+// Kunden passend zur Eingabe: Namensanfang vor Wortanfang vor irgendwo enthalten,
+// sonst zuletzt verwendete Kunden zuerst
+function matchClients(query) {
+  const recent = recentClientIds();
+  const rank = c => { const i = recent.indexOf(c.id); return i < 0 ? Infinity : i; };
+  const q = searchKey(query);
+  return store.clients()
+    .map(c => {
+      const name = searchKey(c.name);
+      const score = !q ? 0
+        : name.startsWith(q) ? 0
+        : name.split(/[\s.\-&/]+/).some(w => w.startsWith(q)) ? 1
+        // „Enthält“ erst ab zwei Buchstaben, sonst findet ein „d“ auch „Studio“
+        : q.length > 1 && name.includes(q) ? 2 : -1;
+      return { c, score };
+    })
+    .filter(x => x.score >= 0)
+    .sort((a, b) => a.score - b.score || rank(a.c) - rank(b.c) || a.c.name.localeCompare(b.c.name, 'de'))
+    .map(x => x.c);
+}
+
+// Suchfeld für Kunden: Anfangsbuchstaben tippen, Treffer antippen oder mit Enter übernehmen.
+// Gibt es den Kunden noch nicht, steht unten „+ Neuer Kunde …“.
+// onSelect(id) bekommt die ID des gewählten bzw. neu angelegten Kunden.
+function clientPicker(wrap, { placeholder = 'Kunde suchen …', onSelect }) {
+  wrap.classList.add('picker');
+  wrap.innerHTML = `
+    <input type="text" class="picker-input" placeholder="${esc(placeholder)}" autocomplete="off" autocorrect="off"
+      autocapitalize="words" spellcheck="false" enterkeyhint="done" role="combobox" aria-autocomplete="list" aria-expanded="false">
+    <div class="picker-list" role="listbox" hidden></div>`;
+  const input = wrap.querySelector('input');
+  const list = wrap.querySelector('.picker-list');
+  let value = '';
+  let options = [];
+  let active = 0;
+
+  function setValue(id) {
+    value = store.get('clients', id) ? id : '';
+    input.value = value ? clientName(value) : '';
   }
-  if (withNew) html += '<option value="__new">+ Neuer Kunde …</option>';
-  return html;
+
+  function render() {
+    const q = input.value.trim();
+    // Steht noch der gewählte Name im Feld, alle Kunden zeigen
+    const query = value && q === clientName(value) ? '' : q;
+    const found = matchClients(query);
+    options = found.map(c => ({ id: c.id, label: c.name }));
+    if (query && !found.some(c => searchKey(c.name) === searchKey(query))) {
+      options.push({ create: query, label: `+ Neuer Kunde „${query}“` });
+    } else if (!query) {
+      options.push({ create: '', label: '+ Neuer Kunde …' });
+    }
+    active = Math.min(active, options.length - 1);
+    list.innerHTML = options.map((o, i) => `
+      <button type="button" class="picker-option${o.create !== undefined ? ' create' : ''}${i === active ? ' active' : ''}${o.id === value ? ' selected' : ''}"
+        data-i="${i}" role="option" tabindex="-1">${o.create !== undefined ? esc(o.label) : highlight(o.label, query)}</button>`).join('');
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+  }
+
+  // Getippte Buchstaben im Namen hervorheben
+  function highlight(name, query) {
+    if (!query) return esc(name);
+    const at = searchKey(name).indexOf(searchKey(query));
+    if (at < 0) return esc(name);
+    return esc(name.slice(0, at)) + '<b>' + esc(name.slice(at, at + query.length)) + '</b>' + esc(name.slice(at + query.length));
+  }
+
+  function close() {
+    list.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+  }
+
+  function choose(o) {
+    close();
+    let id = o.id;
+    if (o.create !== undefined) {
+      const c = createClient(o.create || undefined);
+      if (!c) { setValue(value); return; }
+      id = c.id;
+    }
+    setValue(id);
+    input.blur();
+    onSelect(id);
+  }
+
+  input.addEventListener('focus', () => {
+    active = 0;
+    render();
+    input.select();
+  });
+  input.addEventListener('input', () => { active = 0; render(); });
+  input.addEventListener('keydown', e => {
+    if (list.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      render();
+      list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (options[active]) choose(options[active]);
+    } else if (e.key === 'Escape') {
+      setValue(value);
+      close();
+      input.blur();
+    }
+  });
+  // Ohne Auswahl verlassen: wieder den gewählten Kunden anzeigen
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (wrap.contains(document.activeElement)) return;
+    close();
+    setValue(value);
+  }, 150));
+  // pointerdown statt click, damit das Feld beim Antippen nicht vorher den Fokus verliert
+  list.addEventListener('pointerdown', e => e.preventDefault());
+  list.addEventListener('click', e => {
+    const b = e.target.closest('[data-i]');
+    if (b) choose(options[Number(b.dataset.i)]);
+  });
+
+  return {
+    get value() { return value; },
+    set(id) { if (document.activeElement !== input) setValue(id); else value = store.get('clients', id) ? id : ''; },
+  };
 }
 
 // Mehrtägige Einträge zeigen ihren Zeitraum
@@ -166,7 +284,7 @@ function viewErfassen(root) {
     <form class="card compact-form" id="entry-form" autocomplete="off" novalidate>
       <div class="row">
         <label class="field date-field"><span>Datum</span><input type="date" name="date" required></label>
-        <label class="field"><span>Kunde</span><select name="client"></select></label>
+        <div class="field"><span>Kunde</span><div id="client-picker"></div><input type="hidden" name="client"></div>
       </div>
       <div id="project-wrap"></div>
       <div class="field"><span>Art &amp; Tagessatz</span>
@@ -218,9 +336,19 @@ function viewErfassen(root) {
     f.description.value = editing.description || '';
   }
 
+  const picker = clientPicker(root.querySelector('#client-picker'), {
+    placeholder: 'Kunde suchen …',
+    onSelect: id => {
+      f.client.value = id;
+      projectId = null;
+      renderProject();
+      if (!editing) loadPrices();
+    },
+  });
+
   function renderClients(selected) {
-    f.client.innerHTML = clientOptionsHtml(selected, { placeholder: 'Kunde wählen …', withNew: true });
-    f.client.value = store.get('clients', selected) ? selected : '';
+    picker.set(selected);
+    f.client.value = picker.value;
   }
 
   function renderProject() {
@@ -338,7 +466,6 @@ function viewErfassen(root) {
   }
 
   renderClients(initialClient);
-  let lastClient = f.client.value;
   renderProject();
   prices = currentRates(f.client.value, projectId);
   if (editing && editing.rates) prices[entryKind(editing)] = { ...editing.rates };
@@ -347,16 +474,6 @@ function viewErfassen(root) {
   renderRecent();
 
   form.addEventListener('change', e => {
-    if (e.target.name === 'client') {
-      if (f.client.value === '__new') {
-        const c = createClient();
-        renderClients(c ? c.id : lastClient);
-      }
-      lastClient = f.client.value;
-      projectId = null;
-      renderProject();
-      if (!editing) loadPrices();
-    }
     if (e.target.name === 'project') {
       if (e.target.value === '__new') {
         const p = createProject(f.client.value);
@@ -409,7 +526,7 @@ function viewErfassen(root) {
     const clientId = f.client.value;
     const hours = computedHours();
     if (!f.date.value) return toast('Bitte ein Datum wählen');
-    if (!clientId || clientId === '__new') return toast('Bitte einen Kunden wählen');
+    if (!clientId) return toast('Bitte einen Kunden wählen');
     if (!projectId) return toast('Bitte ein Projekt wählen oder anlegen');
     if (!(hours > 0)) return toast('Bitte eine Dauer eingeben (mind. 0,5 Std.)');
     const set = { weekday: parseNumber(f.rateWeekday.value), weekend: parseNumber(f.rateWeekend.value) };
@@ -457,7 +574,6 @@ function viewErfassen(root) {
     // Kommen Daten erst per Sync an, die Vorauswahl nachholen
     const empty = !f.client.value && !editing;
     renderClients(empty ? lastEnteredClientId() : f.client.value);
-    lastClient = f.client.value;
     renderProject();
     if (empty && f.client.value) loadPrices();
     renderRecent();
@@ -489,17 +605,18 @@ function readPriceEditor(container) {
 }
 
 // ---------- Ansicht: Stundenzettel (inkl. Kunden- und Projektverwaltung) ----------
+// clientId: '' = Übersicht aller Kunden und Projekte
 // open: aufgeklappte Projekte; null = Standard (nur das jüngste Projekt offen)
 // menu: Kundenmenü offen; priceEdit: Projekt, dessen Preis gerade bearbeitet wird
 const pdfUI = { clientId: '', open: null, menu: false, priceEdit: null };
 
 // Alle Projekte des Kunden mit ihren Einträgen, jüngstes Projekt zuerst, leere Projekte am Ende
-function timesheetGroups() {
+function timesheetGroups(clientId = pdfUI.clientId) {
   const entries = store.all('entries')
-    .filter(e => e.clientId === pdfUI.clientId)
+    .filter(e => e.clientId === clientId)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.updatedAt || 0) - (b.updatedAt || 0));
   const map = new Map();
-  for (const p of store.projectsOf(pdfUI.clientId)) {
+  for (const p of store.projectsOf(clientId)) {
     map.set(p.id, { key: p.id, name: p.name, project: p, entries: [] });
   }
   for (const e of entries) {
@@ -531,18 +648,21 @@ function viewPdf(root) {
   root.innerHTML = `
     <h2>Stundenzettel</h2>
     <div class="row" style="margin-bottom:10px">
-      <select id="p-client" aria-label="Kunde"></select>
-      <button class="btn grow-0" data-act="calendar" title="Jahreskalender dieses Kunden">${CAL_ICON}</button>
+      <div id="p-client"></div>
+      <button class="btn grow-0" data-act="calendar" title="Jahreskalender">${CAL_ICON}</button>
       <button class="btn grow-0" data-act="menu" title="Kunde verwalten" aria-label="Kunde verwalten">${MORE_ICON}</button>
     </div>
     <div id="client-menu"></div>
     <div id="preview"></div>
     <button class="btn primary block" id="make-pdf">PDF mit allen Projekten</button>`;
 
-  const clientSel = root.querySelector('#p-client');
-  clientSel.addEventListener('change', () => {
-    Object.assign(pdfUI, { clientId: clientSel.value, open: null, priceEdit: null });
-    update();
+  const picker = clientPicker(root.querySelector('#p-client'), {
+    placeholder: 'Kunde suchen …',
+    onSelect: id => {
+      Object.assign(pdfUI, { clientId: id, open: null, menu: false, priceEdit: null });
+      update();
+      scrollTo({ top: 0 });
+    },
   });
 
   root.addEventListener('click', e => {
@@ -559,6 +679,20 @@ function viewPdf(root) {
     const id = t.dataset.id;
     const client = store.get('clients', pdfUI.clientId);
     switch (t.dataset.act) {
+      case 'overview':
+        Object.assign(pdfUI, { clientId: '', open: null, menu: false, priceEdit: null });
+        update();
+        break;
+      case 'open-client':
+      case 'open-project':
+        // Aus der Übersicht: Kunde öffnen, angetipptes Projekt aufgeklappt
+        Object.assign(pdfUI, {
+          clientId: t.dataset.client, menu: false, priceEdit: null,
+          open: t.dataset.act === 'open-project' ? new Set([id]) : null,
+        });
+        update();
+        scrollTo({ top: 0 });
+        break;
       case 'calendar':
         openCalendar({ clientId: pdfUI.clientId, onEditEntry: editFromCalendar });
         break;
@@ -591,7 +725,7 @@ function viewPdf(root) {
         projects.forEach(x => store.remove('projects', x.id));
         store.remove('clients', client.id);
         toast(`Kunde „${client.name}“ gelöscht`);
-        Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null, menu: false });
+        Object.assign(pdfUI, { clientId: '', open: null, menu: false });
         update();
         break;
       }
@@ -672,16 +806,59 @@ function viewPdf(root) {
       </div>`;
   }
 
+  // Übersicht: alle Kunden mit ihren Projekten, zuletzt bearbeitete Kunden oben
+  function renderOverview(preview) {
+    const recent = recentClientIds();
+    const rank = c => { const i = recent.indexOf(c.id); return i < 0 ? Infinity : i; };
+    const clients = [...store.clients()].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'de'));
+    if (!clients.length) {
+      preview.innerHTML = '<div class="empty">Noch keine Kunden. Tippe oben einen Namen ein, um den ersten anzulegen.</div>';
+      return;
+    }
+    let total = 0, money = 0;
+    let html = '<div class="list overview">';
+    for (const c of clients) {
+      const groups = timesheetGroups(c.id);
+      const entries = groups.flatMap(g => g.entries);
+      const sum = entries.reduce((s, e) => s + e.hours, 0);
+      const amount = sumAmount(entries);
+      total += sum;
+      money += amount;
+      html += `
+        <button class="group-head overview-client" data-act="open-client" data-client="${c.id}">
+          <span>${esc(c.name)}</span>
+          <span>${entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}<span class="chev">›</span></span>
+        </button>`;
+      html += groups.map(g => {
+        const gSum = g.entries.reduce((s, e) => s + e.hours, 0);
+        const last = g.entries.length ? g.entries[g.entries.length - 1] : null;
+        const sub = last
+          ? `${g.entries.length} ${g.entries.length === 1 ? 'Eintrag' : 'Einträge'} · zuletzt ${fmtDate(entryEndDate(last))}`
+          : 'Noch keine Einträge';
+        return `
+          <button class="list-item" data-act="open-project" data-client="${c.id}" data-id="${g.key}">
+            <div class="main"><div class="title">${esc(g.name || 'Ohne Projekt')}</div><div class="sub">${sub}</div></div>
+            ${g.entries.length ? `<div class="hours">${fmtHours(gSum)} h<div class="money">${fmtMoney(sumAmount(g.entries))}</div></div>` : ''}
+          </button>`;
+      }).join('');
+    }
+    html += '</div>';
+    if (total) {
+      html += `<div class="list"><div class="summary"><span>Alle Kunden <span class="hint">${fmtHours(total)} h (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+    }
+    preview.innerHTML = html;
+  }
+
   function update() {
-    clientSel.innerHTML = clientOptionsHtml(pdfUI.clientId, { placeholder: 'Kunde wählen …' });
-    clientSel.value = pdfUI.clientId;
     const client = store.get('clients', pdfUI.clientId);
+    if (!client) pdfUI.clientId = '';
+    picker.set(pdfUI.clientId);
     renderMenu(client);
 
     const preview = root.querySelector('#preview');
     const button = root.querySelector('#make-pdf');
     if (!client) {
-      preview.innerHTML = '<div class="empty">Wähle einen Kunden, um den Stundenzettel zu sehen.</div>';
+      renderOverview(preview);
       button.hidden = true;
       return;
     }
@@ -692,7 +869,7 @@ function viewPdf(root) {
     if (!pdfUI.open) pdfUI.open = new Set(groups.length ? [groups[0].key] : []);
 
     let total = 0, money = 0;
-    let html = '<div class="list">';
+    let html = '<button class="link back-link" data-act="overview">‹ Alle Kunden</button><div class="list">';
     for (const g of groups) {
       const sum = g.entries.reduce((s, e) => s + e.hours, 0);
       const amount = sumAmount(g.entries);
@@ -1069,8 +1246,9 @@ addEventListener('hashchange', () => {
 tabs.addEventListener('click', e => {
   const b = e.target.closest('button[data-view]');
   if (!b) return;
+  // Stundenzettel beginnt immer mit der Übersicht aller Kunden
   if (b.dataset.view === 'pdf') {
-    Object.assign(pdfUI, { clientId: lastEnteredClientId(), open: null, menu: false, priceEdit: null });
+    Object.assign(pdfUI, { clientId: '', open: null, menu: false, priceEdit: null });
   }
   show(b.dataset.view);
   scrollTo({ top: 0 });

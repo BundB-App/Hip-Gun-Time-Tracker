@@ -345,3 +345,32 @@ button.cal-d.video { color: #fff; }
 .menu-item:hover { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
 .steps ul { padding-left: 18px; margin: 6px 0 0; }
 .steps ul li { margin-bottom: 6px; }
+
+/* ---------- Kundensuche ---------- */
+.picker { position: relative; }
+.picker-list {
+  /* breiter als ein schmales Feld, rechtsbündig, damit lange Namen ganz zu sehen sind */
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 15;
+  min-width: 100%; width: max-content; max-width: min(340px, calc(100vw - 32px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14); max-height: 260px; overflow-y: auto; padding: 4px 0;
+}
+.picker-option {
+  display: block; width: 100%; text-align: left; background: none; border: 0; font: inherit; font-size: 15px;
+  color: var(--text); padding: 10px 14px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.picker-option b { color: var(--accent-ink); }
+.picker-option.selected { font-weight: 600; }
+.picker-option.active { background: var(--accent-soft); }
+.picker-option.create { color: var(--accent-ink); font-weight: 600; border-top: 1px solid var(--line); }
+.picker-option.create:first-child { border-top: 0; }
+
+/* ---------- Stundenzettel: Übersicht ---------- */
+.overview-client {
+  width: 100%; border-left: 0; border-right: 0; border-bottom: 0; font-family: inherit; text-align: left;
+  cursor: pointer; align-items: center; padding-top: 10px; padding-bottom: 10px; color: var(--text); font-size: 14px;
+}
+.overview-client .chev { margin-left: 8px; color: var(--muted); }
+.overview .list-item { padding-top: 9px; padding-bottom: 9px; }
+.overview .list-item .title { font-weight: 500; }
+.back-link { margin: -4px 0 6px; }

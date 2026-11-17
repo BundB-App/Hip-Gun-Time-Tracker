@@ -63,9 +63,25 @@ function createClient(name) {
   return c;
 }
 
+// Projektstatus: abgeschlossen (doneAt) und bezahlt (paidAt), jeweils als Datum.
+// Bezahlte Projekte liegen im Archiv des Kunden.
+function isArchived(p) { return !!p?.paidAt; }
+function isClosed(p) { return !!(p?.doneAt || p?.paidAt); }
+
+// Projekte, für die noch Zeiten erfasst werden
+function openProjectsOf(clientId) {
+  return store.projectsOf(clientId).filter(p => !isClosed(p));
+}
+
+function statusBadge(p) {
+  if (isArchived(p)) return `<span class="badge status-paid">bezahlt ${fmtDate(p.paidAt)}</span>`;
+  if (p?.doneAt) return '<span class="badge status-due">Zahlung offen</span>';
+  return '';
+}
+
 // Vorauswahl: zuletzt verwendetes Projekt des Kunden, sonst das neueste aktive
 function defaultProjectId(clientId) {
-  const active = store.projectsOf(clientId);
+  const active = openProjectsOf(clientId);
   const last = store.all('entries')
     .filter(e => e.clientId === clientId && e.projectId && active.some(p => p.id === e.projectId))
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
@@ -353,7 +369,7 @@ function viewErfassen(root) {
 
   function renderProject() {
     const clientId = f.client.value;
-    const projects = clientId ? store.projectsOf(clientId) : [];
+    const projects = clientId ? openProjectsOf(clientId) : [];
     const current = projectId ? store.get('projects', projectId) : null;
     if (current && current.clientId === clientId && !projects.includes(current)) projects.push(current);
     if (clientId && !projects.some(p => p.id === projectId)) projectId = defaultProjectId(clientId);
@@ -607,8 +623,9 @@ function readPriceEditor(container) {
 // ---------- Ansicht: Stundenzettel (inkl. Kunden- und Projektverwaltung) ----------
 // clientId: '' = Übersicht aller Kunden und Projekte; overviewOpen: dort aufgeklappte Kunden
 // open: aufgeklappte Projekte; null = Standard (nur das jüngste Projekt offen)
+// archiveFor: Kunde, dessen Archiv aufgeklappt ist
 // menu: Kundenmenü offen; priceEdit: Projekt, dessen Preis gerade bearbeitet wird
-const pdfUI = { clientId: '', overviewOpen: new Set(), open: null, menu: false, priceEdit: null };
+const pdfUI = { clientId: '', overviewOpen: new Set(), open: null, archiveFor: '', menu: false, priceEdit: null };
 
 // Alle Projekte des Kunden mit ihren Einträgen, jüngstes Projekt zuerst, leere Projekte am Ende
 function timesheetGroups(clientId = pdfUI.clientId) {
@@ -701,6 +718,31 @@ function viewPdf(root) {
         update();
         scrollTo({ top: 0 });
         break;
+      case 'open-archive':
+        Object.assign(pdfUI, { clientId: t.dataset.client, archiveFor: t.dataset.client, open: null, menu: false, priceEdit: null });
+        update();
+        scrollTo({ top: 0 });
+        break;
+      case 'archive-toggle':
+        pdfUI.archiveFor = pdfUI.archiveFor === pdfUI.clientId ? '' : pdfUI.clientId;
+        update();
+        break;
+      case 'project-done':
+        store.upsert('projects', { id, doneAt: todayISO() });
+        toast(`„${projectName(id)}“ abgeschlossen – Zahlung offen`);
+        break;
+      case 'project-paid': {
+        const p = store.get('projects', id);
+        store.upsert('projects', { id, doneAt: p.doneAt || todayISO(), paidAt: todayISO() });
+        pdfUI.open?.delete(id);
+        toast(`„${p.name}“ bezahlt – liegt jetzt im Archiv`);
+        break;
+      }
+      case 'project-reopen':
+        store.upsert('projects', { id, doneAt: null, paidAt: null });
+        pdfUI.open = new Set([id]);
+        toast(`„${projectName(id)}“ wieder offen`);
+        break;
       case 'calendar':
         openCalendar({ clientId: pdfUI.clientId, onEditEntry: editFromCalendar });
         break;
@@ -779,10 +821,10 @@ function viewPdf(root) {
 
   root.querySelector('#make-pdf').addEventListener('click', () => makePdf(null));
 
-  // projectKey = null: alle Projekte mit Einträgen
+  // projectKey = null: alle Projekte mit Einträgen außer dem Archiv
   async function makePdf(projectKey) {
     const groups = timesheetGroups()
-      .filter(g => g.entries.length && (projectKey === null || g.key === projectKey));
+      .filter(g => g.entries.length && (projectKey === null ? !isArchived(g.project) : g.key === projectKey));
     if (!groups.length) return;
     // Zeitraum ergibt sich aus den enthaltenen Einträgen
     const all = groups.flatMap(g => g.entries);
@@ -814,7 +856,8 @@ function viewPdf(root) {
       </div>`;
   }
 
-  // Übersicht: alle Kunden, zuletzt bearbeitete oben; aufgeklappt zeigen sie ihre Projekte
+  // Übersicht: alle Kunden, zuletzt bearbeitete oben; aufgeklappt zeigen sie ihre Projekte.
+  // Bezahlte Projekte (Archiv) zählen hier nicht mit.
   function renderOverview(preview) {
     const recent = recentClientIds();
     const rank = c => { const i = recent.indexOf(c.id); return i < 0 ? Infinity : i; };
@@ -823,15 +866,18 @@ function viewPdf(root) {
       preview.innerHTML = '<div class="empty">Noch keine Kunden. Tippe oben einen Namen ein, um den ersten anzulegen.</div>';
       return;
     }
-    let total = 0, money = 0;
+    let total = 0, money = 0, due = 0;
     let html = '<div class="list overview">';
     for (const c of clients) {
-      const groups = timesheetGroups(c.id);
+      const all = timesheetGroups(c.id);
+      const groups = all.filter(g => !isArchived(g.project));
+      const archived = all.length - groups.length;
       const entries = groups.flatMap(g => g.entries);
       const sum = entries.reduce((s, e) => s + e.hours, 0);
       const amount = sumAmount(entries);
       total += sum;
       money += amount;
+      due += sumAmount(groups.filter(g => isClosed(g.project)).flatMap(g => g.entries));
       const open = pdfUI.overviewOpen.has(c.id);
       html += `
         <button class="group-head group-toggle overview-client${open ? ' open' : ''}" data-toggle-client="${c.id}" aria-expanded="${open}">
@@ -847,17 +893,70 @@ function viewPdf(root) {
           : 'Noch keine Einträge';
         return `
           <button class="list-item" data-act="open-project" data-client="${c.id}" data-id="${g.key}">
-            <div class="main"><div class="title">${esc(g.name || 'Ohne Projekt')}</div><div class="sub">${sub}</div></div>
+            <div class="main"><div class="title">${esc(g.name || 'Ohne Projekt')} ${statusBadge(g.project)}</div><div class="sub">${sub}</div></div>
             ${g.entries.length ? `<div class="hours">${fmtHours(gSum)} h<div class="money">${fmtMoney(sumAmount(g.entries))}</div></div>` : ''}
           </button>`;
       }).join('');
-      html += `<div class="overview-open"><button class="link" data-act="open-client" data-client="${c.id}">Stundenzettel von ${esc(c.name)} öffnen ›</button></div>`;
+      html += `<div class="overview-open">
+        <button class="link" data-act="open-client" data-client="${c.id}">Stundenzettel von ${esc(c.name)} öffnen ›</button>
+        ${archived ? `<button class="link muted-link" data-act="open-archive" data-client="${c.id}">Archiv: ${archived} bezahlte${archived === 1 ? 's Projekt' : ' Projekte'} ›</button>` : ''}
+      </div>`;
     }
     html += '</div>';
     if (total) {
-      html += `<div class="list"><div class="summary"><span>Alle Kunden <span class="hint">${fmtHours(total)} h (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+      html += `<div class="list">
+        <div class="summary"><span>Alle Kunden <span class="hint">${fmtHours(total)} h (${fmtDays(total)}) · ohne Archiv</span></span><span class="big">${fmtMoney(money)}</span></div>
+        ${due ? `<div class="summary sub-summary"><span>davon abgeschlossen, Zahlung offen</span><span>${fmtMoney(due)}</span></div>` : ''}
+      </div>`;
     }
     preview.innerHTML = html;
+  }
+
+  // Ein Projekt im Stundenzettel: Kopfzeile, aufgeklappt Einträge und Aktionen
+  function groupHtml(g, { pdfButton }) {
+    const sum = g.entries.reduce((s, e) => s + e.hours, 0);
+    const amount = sumAmount(g.entries);
+    const open = pdfUI.open.has(g.key);
+    const p = g.project;
+    let html = `
+      <button class="group-head group-toggle${open ? ' open' : ''}" data-toggle-group="${g.key}" aria-expanded="${open}">
+        <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span> ${statusBadge(p)}
+          <span class="group-prices">${g.entries.length ? usedPricesText(g.entries) : (p ? 'Preis: ' + ratesLabel(currentRates(pdfUI.clientId, p.id)) : '')}</span></span>
+        <span>${g.entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}</span>
+      </button>`;
+    if (!open) return html;
+    html += g.entries.length ? g.entries.map(e => `
+      <button class="list-item" data-edit="${e.id}">
+        <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
+        <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
+        <div class="hours">${fmtHours(e.hours)} h${entryEndDate(e) !== e.date ? `<div class="money">${fmtDays(e.hours)}</div>` : ''}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
+      </button>`).join('') : '<div class="empty" style="padding:14px">Noch keine Einträge in diesem Projekt.</div>';
+    if (!p) return html;
+    // Status-Schritte: offen → abgeschlossen → bezahlt (Archiv)
+    const status = isArchived(p)
+      ? `<button class="btn small" data-act="project-reopen" data-id="${p.id}">Aus dem Archiv holen</button>`
+      : p.doneAt
+        ? `<button class="btn small primary" data-act="project-paid" data-id="${p.id}">Als bezahlt markieren</button>
+           <button class="btn small" data-act="project-reopen" data-id="${p.id}">Wieder öffnen</button>`
+        : `<button class="btn small" data-act="project-done" data-id="${p.id}">Abschließen</button>`;
+    html += `
+      <div class="group-actions">
+        ${g.entries.length && pdfButton ? `<button class="btn small" data-act="project-pdf" data-id="${p.id}">PDF nur dieses Projekt</button>` : ''}
+        ${status}
+        ${isClosed(p) ? '' : `<button class="btn small" data-act="project-price" data-id="${p.id}">Preis ändern</button>`}
+        <button class="btn small" data-act="project-rename" data-id="${p.id}">Umbenennen</button>
+        <button class="btn small danger" data-act="project-delete" data-id="${p.id}">Löschen</button>
+      </div>
+      ${pdfUI.priceEdit === p.id ? `
+        <div class="group-price-edit">
+          <p class="hint" style="margin-top:0">Aktueller Preis: ${ratesLabel(currentRates(pdfUI.clientId, p.id))}. Ein neuer Preis gilt für neue Einträge, bereits erfasste behalten ihren Preis.</p>
+          ${priceEditorHtml(p.id, currentRates(pdfUI.clientId, p.id))}
+          <div class="actions">
+            <button class="btn small primary" data-act="project-price-save" data-id="${p.id}">Preis speichern</button>
+            <button class="btn small" data-act="project-price" data-id="${p.id}">Abbrechen</button>
+          </div>
+        </div>` : ''}`;
+    return html;
   }
 
   function update() {
@@ -873,57 +972,37 @@ function viewPdf(root) {
       button.hidden = true;
       return;
     }
-    const groups = timesheetGroups();
+    const all = timesheetGroups();
+    const groups = all.filter(g => !isArchived(g.project));
+    const archived = all.filter(g => isArchived(g.project));
     const withEntries = groups.filter(g => g.entries.length);
     button.hidden = !withEntries.length;
     button.textContent = withEntries.length === 1 ? 'PDF erstellen' : 'PDF mit allen Projekten';
-    if (!pdfUI.open) pdfUI.open = new Set(groups.length ? [groups[0].key] : []);
-
-    let total = 0, money = 0;
-    let html = '<button class="link back-link" data-act="overview">‹ Alle Kunden</button><div class="list">';
-    for (const g of groups) {
-      const sum = g.entries.reduce((s, e) => s + e.hours, 0);
-      const amount = sumAmount(g.entries);
-      total += sum;
-      money += amount;
-      const open = pdfUI.open.has(g.key);
-      const p = g.project;
-      html += `
-        <button class="group-head group-toggle${open ? ' open' : ''}" data-toggle-group="${g.key}" aria-expanded="${open}">
-          <span><span class="chev">›</span>${esc(g.name || 'Ohne Projekt')} <span class="count">${g.entries.length}</span>
-            <span class="group-prices">${g.entries.length ? usedPricesText(g.entries) : (p ? 'Preis: ' + ratesLabel(currentRates(pdfUI.clientId, p.id)) : '')}</span></span>
-          <span>${g.entries.length ? `${fmtHours(sum)} h · ${fmtMoney(amount)}` : ''}</span>
-        </button>`;
-      if (!open) continue;
-      html += g.entries.length ? g.entries.map(e => `
-        <button class="list-item" data-edit="${e.id}">
-          <div class="sub" style="width:80px;flex:none">${entryDateText(e).replace(' – ', ' –<br>')}</div>
-          <div class="main"><div class="desc" style="margin:0">${kindBadge(e)} ${esc(e.description) || '–'}</div></div>
-          <div class="hours">${fmtHours(e.hours)} h${entryEndDate(e) !== e.date ? `<div class="money">${fmtDays(e.hours)}</div>` : ''}<div class="money">${fmtMoney(entryAmount(e))}</div></div>
-        </button>`).join('') : '<div class="empty" style="padding:14px">Noch keine Einträge in diesem Projekt.</div>';
-      if (p) {
-        html += `
-          <div class="group-actions">
-            ${g.entries.length && withEntries.length > 1 ? `<button class="btn small" data-act="project-pdf" data-id="${p.id}">PDF nur dieses Projekt</button>` : ''}
-            <button class="btn small" data-act="project-price" data-id="${p.id}">Preis ändern</button>
-            <button class="btn small" data-act="project-rename" data-id="${p.id}">Umbenennen</button>
-            <button class="btn small danger" data-act="project-delete" data-id="${p.id}">Löschen</button>
-          </div>
-          ${pdfUI.priceEdit === p.id ? `
-            <div class="group-price-edit">
-              <p class="hint" style="margin-top:0">Aktueller Preis: ${ratesLabel(currentRates(pdfUI.clientId, p.id))}. Ein neuer Preis gilt für neue Einträge, bereits erfasste behalten ihren Preis.</p>
-              ${priceEditorHtml(p.id, currentRates(pdfUI.clientId, p.id))}
-              <div class="actions">
-                <button class="btn small primary" data-act="project-price-save" data-id="${p.id}">Preis speichern</button>
-                <button class="btn small" data-act="project-price" data-id="${p.id}">Abbrechen</button>
-              </div>
-            </div>` : ''}`;
-      }
+    // Standard: das jüngste noch offene Projekt aufklappen
+    if (!pdfUI.open) {
+      const first = groups.find(g => !isClosed(g.project)) || groups[0];
+      pdfUI.open = new Set(first ? [first.key] : []);
     }
-    html += `</div>
-      <div class="add-project"><button class="link" data-act="project-new">+ Neues Projekt für ${esc(client.name)}</button></div>`;
+
+    const total = withEntries.reduce((s, g) => s + g.entries.reduce((t, e) => t + e.hours, 0), 0);
+    const money = withEntries.reduce((s, g) => s + sumAmount(g.entries), 0);
+    let html = '<button class="link back-link" data-act="overview">‹ Alle Kunden</button>';
+    html += groups.length
+      ? `<div class="list">${groups.map(g => groupHtml(g, { pdfButton: withEntries.length > 1 })).join('')}</div>`
+      : '<div class="empty">Keine offenen Projekte.</div>';
+    html += `<div class="add-project"><button class="link" data-act="project-new">+ Neues Projekt für ${esc(client.name)}</button></div>`;
     if (withEntries.length) {
       html += `<div class="list"><div class="summary"><span>Gesamt <span class="hint">${fmtHours(total)} h (${fmtDays(total)})</span></span><span class="big">${fmtMoney(money)}</span></div></div>`;
+    }
+    if (archived.length) {
+      const archiveOpen = pdfUI.archiveFor === client.id;
+      const archMoney = archived.reduce((s, g) => s + sumAmount(g.entries), 0);
+      html += `
+        <button class="archive-toggle${archiveOpen ? ' open' : ''}" data-act="archive-toggle" aria-expanded="${archiveOpen}">
+          <span><span class="chev">›</span>Archiv <span class="count">${archived.length}</span> <span class="hint">bezahlte Projekte</span></span>
+          <span>${fmtMoney(archMoney)}</span>
+        </button>`;
+      if (archiveOpen) html += `<div class="list archive">${archived.map(g => groupHtml(g, { pdfButton: true })).join('')}</div>`;
     }
     preview.innerHTML = html;
   }

@@ -377,3 +377,21 @@ button.cal-d.video { color: #fff; }
 .overview .list-item { padding-top: 9px; padding-bottom: 9px; }
 .overview .list-item .title { font-weight: 500; }
 .back-link { margin: -4px 0 6px; }
+
+/* ---------- Projektstatus und Archiv ---------- */
+.badge.status-due { background: #fdf0d5; color: #8a5a00; }
+.badge.status-paid { background: var(--bg); color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
+@media (prefers-color-scheme: dark) { .badge.status-due { background: #3a2c0c; color: #f3c46b; } }
+.overview-open { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.muted-link { color: var(--muted); }
+.summary.sub-summary { border-top: 1px solid var(--line); font-size: 14px; font-weight: 500; color: var(--muted); padding-top: 9px; padding-bottom: 9px; }
+.archive-toggle {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
+  margin: 4px 0 10px; padding: 11px 14px; border: 1px dashed var(--line); border-radius: var(--radius);
+  background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; text-align: left;
+}
+.archive-toggle .chev { display: inline-block; width: 14px; margin-right: 4px; transition: transform .15s; }
+.archive-toggle.open .chev { transform: rotate(90deg); }
+.archive-toggle .hint { display: inline; margin: 0; font-weight: 500; }
+.archive-toggle .count { font-size: 11px; font-weight: 600; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.list.archive { opacity: .92; }

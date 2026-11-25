@@ -15,6 +15,11 @@
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="stylesheet" href="styles.css">
   <script>
+    // Gewähltes Design (Einstellungen) schon vor dem ersten Zeichnen setzen
+    try {
+      const theme = localStorage.getItem('ht.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {}
     // Direkt aus dem Dropbox-Ordner geöffnet (file://): Browser blockieren dort die App-Module,
     // also zur Online-Version weiterleiten.
     if (location.protocol === 'file:') {

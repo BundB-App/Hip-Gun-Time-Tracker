@@ -14,8 +14,9 @@
   color-scheme: light;
 }
 
+/* Dunkles Design: automatisch nach System, außer „Hell“ ist gewählt; oder fest „Dunkel“ (Einstellungen) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #101010;
     --surface: #1b1b1b;
     --text: #f1f1ec;
@@ -27,6 +28,18 @@
     --danger: #ff6b5b;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #101010;
+  --surface: #1b1b1b;
+  --text: #f1f1ec;
+  --muted: #9a9a93;
+  --line: #2d2d2b;
+  --accent: #b3d62a;
+  --accent-ink: #cde668;
+  --accent-soft: #2a3310;
+  --danger: #ff6b5b;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -53,7 +66,8 @@ body {
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-logo { height: 30px; width: auto; }
-@media (prefers-color-scheme: dark) { .brand-logo { background: #fff; border-radius: 6px; padding: 2px 4px; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-logo { background: #fff; border-radius: 6px; padding: 2px 4px; } }
+:root[data-theme="dark"] .brand-logo { background: #fff; border-radius: 6px; padding: 2px 4px; }
 .brand-title { font-weight: 700; font-size: 17px; white-space: nowrap; }
 
 .sync-pill {
@@ -223,11 +237,13 @@ ul.steps li { margin-bottom: 8px; }
   background: #fff4d6; border-color: #e0a100;
 }
 .banner u { color: var(--accent-ink); font-weight: 600; }
-@media (prefers-color-scheme: dark) { .banner { background: #3a2f10; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .banner { background: #3a2f10; } }
+:root[data-theme="dark"] .banner { background: #3a2f10; }
 
 /* ---------- Ton / Video & Beträge ---------- */
 :root { --ton: #a2c516; --video: #3d8bfd; }
-@media (prefers-color-scheme: dark) { :root { --ton: #b3d62a; --video: #5b9dff; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ton: #b3d62a; --video: #5b9dff; } }
+:root[data-theme="dark"] { --ton: #b3d62a; --video: #5b9dff; }
 .badge.kind-ton { background: color-mix(in srgb, var(--ton) 22%, transparent); color: var(--accent-ink); }
 .badge.kind-video { background: color-mix(in srgb, var(--video) 18%, transparent); color: var(--video); }
 .hours { text-align: right; }
@@ -381,7 +397,8 @@ button.cal-d.video { color: #fff; }
 /* ---------- Projektstatus und Archiv ---------- */
 .badge.status-due { background: #fdf0d5; color: #8a5a00; }
 .badge.status-paid { background: var(--bg); color: var(--muted); border: 1px solid var(--line); font-weight: 500; }
-@media (prefers-color-scheme: dark) { .badge.status-due { background: #3a2c0c; color: #f3c46b; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge.status-due { background: #3a2c0c; color: #f3c46b; } }
+:root[data-theme="dark"] .badge.status-due { background: #3a2c0c; color: #f3c46b; }
 .overview-open { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .muted-link { color: var(--muted); }
 .summary.sub-summary { border-top: 1px solid var(--line); font-size: 14px; font-weight: 500; color: var(--muted); padding-top: 9px; padding-bottom: 9px; }
@@ -395,3 +412,7 @@ button.cal-d.video { color: #fff; }
 .archive-toggle .hint { display: inline; margin: 0; font-weight: 500; }
 .archive-toggle .count { font-size: 11px; font-weight: 600; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
 .list.archive { opacity: .92; }
+
+/* ---------- Einstellungen: Darstellung ---------- */
+.theme-seg { display: flex; }
+.theme-seg button { flex: 1; }

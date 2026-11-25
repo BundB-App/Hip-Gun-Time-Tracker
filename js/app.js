@@ -1011,6 +1011,34 @@ function viewPdf(root) {
   return update;
 }
 
+// ---------- Design (hell/dunkel) ----------
+// Pro Gerät gespeichert; 'auto' folgt der Systemeinstellung
+const THEMES = { auto: 'Automatisch', light: 'Hell', dark: 'Dunkel' };
+const THEME_KEY = 'ht.theme';
+
+function getTheme() {
+  try { return THEMES[localStorage.getItem(THEME_KEY)] ? localStorage.getItem(THEME_KEY) : 'auto'; } catch { return 'auto'; }
+}
+
+function applyTheme(theme) {
+  if (theme === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  // Farbe der Browser-/Statusleiste passend zum Design
+  const colors = { light: '#ffffff', dark: '#141414' };
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+    const own = meta.media.includes('dark') ? 'dark' : 'light';
+    meta.content = colors[theme === 'auto' ? own : theme];
+  }
+}
+
+function setTheme(theme) {
+  try {
+    if (theme === 'auto') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, theme);
+  } catch {}
+  applyTheme(theme);
+}
+
 // ---------- Ansicht: Einstellungen ----------
 function viewEinstellungen(root) {
   function render() {
@@ -1074,6 +1102,14 @@ function viewEinstellungen(root) {
       </div>
 
       <div class="card">
+        <h3 style="margin-top:0">Darstellung</h3>
+        <div class="segmented theme-seg">
+          ${Object.entries(THEMES).map(([k, label]) => `<button type="button" data-act="theme" data-theme-choice="${k}" class="${getTheme() === k ? 'on' : ''}">${label}</button>`).join('')}
+        </div>
+        <p class="hint" style="margin-bottom:0">Gilt für dieses Gerät. „Automatisch“ folgt der Einstellung von macOS bzw. iOS.</p>
+      </div>
+
+      <div class="card">
         <h3 style="margin-top:0">Daten</h3>
         <p style="margin-top:0">${counts.k} Kunden · ${counts.e} Einträge${store.dirty ? ' · <span class="badge grey">nicht synchronisierte Änderungen</span>' : ''}</p>
         <div class="actions">
@@ -1106,6 +1142,10 @@ function viewEinstellungen(root) {
     if (!t) return;
     try {
       switch (t.dataset.act) {
+        case 'theme':
+          setTheme(t.dataset.themeChoice);
+          root.querySelectorAll('[data-theme-choice]').forEach(b => b.classList.toggle('on', b === t));
+          break;
         case 'connect':
           saveInputs();
           await dbx.startAuth({ withRedirect: true });
@@ -1271,7 +1311,7 @@ function viewAnleitung(root) {
       <h3 style="margin-top:0">Und am Mac?</h3>
       <p style="margin-top:0">Einfach ${link(APP_URL, 'die App-Adresse')} in Safari oder Chrome öffnen, unter Einstellungen auf <b>Mit Dropbox verbinden</b> klicken und zulassen. Als eigene App installieren:</p>
       <ul class="steps">
-        <li><b>Safari:</b> Menü <b>Ablage › Zum Dock hinzufügen</b>.</li>
+        <li><b>Safari:</b> Menü <b>Ablage › Zum Dock hinzufügen …</b> und <b>Hinzufügen</b> klicken. Die App liegt danach im Dock und im Ordner <b>Programme</b> deines Benutzerordners. Sie hat einen eigenen Speicher: Steht dort „Nicht verbunden“, in der App unter Einstellungen einmal mit Dropbox verbinden.</li>
         <li><b>Chrome:</b> rechts in der Adressleiste auf das <b>Installieren-Symbol</b> (Bildschirm mit Pfeil) oder Menü <b>⋮ › Streamen, speichern und teilen › Seite als App installieren …</b> Die App liegt danach unter <b>Programme › Chrome-Apps</b>; ins Dock per Rechtsklick <b>› Optionen › Im Dock behalten</b>.</li>
       </ul>
       <p class="hint" style="margin-bottom:0">Die <code>index.html</code> im Dropbox-Ordner nicht direkt öffnen – sie leitet nur auf die Online-Version um.</p>
@@ -1392,6 +1432,8 @@ setInterval(() => { if (document.visibilityState === 'visible') dbx.sync(); }, 2
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(err => console.warn('Service Worker', err));
 }
+
+applyTheme(getTheme());
 
 // Beim Start immer mit der Erfassung beginnen
 if (!dbx.isConnected()) migratePrices();

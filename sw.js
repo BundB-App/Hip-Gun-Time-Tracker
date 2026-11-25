@@ -1,6 +1,6 @@
 // Offline-Fähigkeit: App-Dateien werden gecacht. Online wird immer zuerst
 // das Netz gefragt (damit Updates sofort ankommen), offline der Cache.
-const CACHE = 'time-tracker-v26';
+const CACHE = 'time-tracker-v27';
 const ASSETS = [
   './',
   'index.html',
@@ -16,9 +16,9 @@ const ASSETS = [
   'js/calendar.js',
   'vendor/jspdf.umd.min.js',
   'assets/logo.png',
-  'assets/icon-180.png',
-  'assets/icon-192.png',
-  'assets/icon-512.png',
+  'assets/app-icon-180.png',
+  'assets/app-icon-192.png',
+  'assets/app-icon-512.png',
 ];
 
 self.addEventListener('install', event => {
